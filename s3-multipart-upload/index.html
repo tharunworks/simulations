@@ -1,0 +1,171 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>S3 Multipart Upload Interactive Lab — Checksum Modes Explained</title><style>
+:root{--viz-border:#d2d7de;--viz-text:#19212b;--viz-muted:#5c6776;--viz-accent:#365bb8;--viz-accent-bg:#dde7ff;--viz-panel:#f5f7fa}
+*{box-sizing:border-box}body{margin:0;padding:20px;background:#fff;color:var(--viz-text);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+#s3lab{max-width:900px;margin:auto}.space-y-3>*+*{margin-top:16px}.space-y-2>*+*{margin-top:8px}
+.grid{display:grid}.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}.gap-1{gap:4px}.gap-2{gap:8px}.gap-1\.5{gap:6px}.gap-3{gap:12px}.flex{display:flex}.flex-wrap{flex-wrap:wrap}.justify-between{justify-content:space-between}.items-center{align-items:center}.ml-auto{margin-left:auto}
+.block{display:block}.w-full{width:100%}.mt-1{margin-top:4px}.mt-3{margin-top:12px}.mb-1{margin-bottom:4px}.p-2{padding:8px}.p-3{padding:12px}.px-3{padding-left:12px;padding-right:12px}.px-4{padding-left:16px;padding-right:16px}.py-2{padding-top:8px;padding-bottom:8px}.pt-3{padding-top:12px}.rounded-lg{border-radius:8px}.rounded-xl{border-radius:12px}.rounded-full{border-radius:99px}.h-1\.5{height:6px}
+.border{border:1px solid var(--viz-border)}.border-t{border-top:1px solid var(--viz-border)}.text-xs{font-size:12px}.text-sm{font-size:14px}.text-lg{font-size:18px}.font-semibold{font-weight:650}.font-medium{font-weight:550}.text-base{font-size:16px}.bg-transparent{background:transparent}button{cursor:pointer;background:white;color:inherit}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--viz-accent);outline-offset:2px}pre{margin:0}input,select{color:inherit;width:100%}
+@media(min-width:640px){.sm\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.sm\:grid-cols-7{grid-template-columns:repeat(7,minmax(0,1fr))}.sm\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.sm\:p-4{padding:16px}}
+@media(max-width:480px){body{padding:12px}#s3lab .sl-node{font-size:10px;padding:6px 2px}#s3lab .sl-part{font-size:10px;padding:4px}}
+</style></head><body><nav aria-label="Collection" style="max-width:900px;margin:0 auto 20px"><a href="../" style="color:#365bb8">← All simulations</a></nav><div id="s3lab" class="w-full space-y-3 text-base">
+<style>
+#s3lab .sl-node{border:1px solid var(--viz-border);border-radius:10px;padding:10px 6px;text-align:center;min-width:0;font-size:13px}
+#s3lab .sl-active{border:2px solid var(--viz-accent);font-weight:700}
+#s3lab .sl-code{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;background:var(--viz-panel);border:1px solid var(--viz-border);border-radius:8px;padding:10px;min-height:100px}
+#s3lab .sl-part{border:1px solid var(--viz-border);border-radius:8px;padding:7px;text-align:center;font-size:12px}
+#s3lab button{min-height:42px}
+#s3lab input,#s3lab select{font-size:16px}
+#s3lab .sl-muted{color:var(--viz-muted)}
+</style>
+<section class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+<label class="text-sm">Scenario<select id="sl-scenario" class="block w-full mt-1 rounded-lg border p-2 bg-transparent"><option value="ok">Successful upload</option><option value="wrong">Wrong declared size</option><option value="missing">Missing part</option><option value="corrupt">Corrupted bytes</option><option value="tamper">Checksum header changed</option><option value="dbfail">PostgreSQL failure</option></select></label>
+<label class="text-sm">Declared size (MiB)<input id="sl-declared" type="number" min="1" max="25600" value="100" class="block w-full mt-1 rounded-lg border p-2 bg-transparent"></label>
+<label class="text-sm">Actual size (MiB)<input id="sl-actual" type="number" min="1" max="25600" value="100" class="block w-full mt-1 rounded-lg border p-2 bg-transparent"></label>
+<label class="text-sm">Part size (MiB)<input id="sl-size" type="number" min="5" max="5120" value="16" class="block w-full mt-1 rounded-lg border p-2 bg-transparent"></label>
+</section>
+<section class="border rounded-xl p-3" style="background:var(--viz-panel)">
+<label class="text-sm font-semibold block" for="sl-binding">Checksum mode</label>
+<select id="sl-binding" class="block w-full mt-1 rounded-lg border p-2 bg-transparent" aria-describedby="sl-mode-help">
+<option value="signed">A · Signed SHA-256 part checksum (recommended)</option>
+<option value="unsigned">B · Add checksum header only at PUT (invalid SigV4)</option>
+<option value="none">C · No client checksum header (S3 default)</option>
+</select>
+<div id="sl-mode-help" class="text-sm mt-1" aria-live="polite"></div>
+<details class="mt-3 text-sm"><summary style="cursor:pointer;font-weight:600">Checksum digest vs HMAC signature vs checksum type</summary>
+<div class="mt-1 sl-muted">SHA-256(part bytes) is a digest; S3 recomputes it to detect changed bytes. HMAC-SHA256 signs the canonical HTTP request (including the chosen checksum header) to authorize it. Neither value is encrypted or decrypted. <strong>COMPOSITE</strong> combines per-part checksums for multipart uploads; <strong>FULL_OBJECT</strong> represents the entire object (for example CRC64NVME). The final multipart ETag is not necessarily a full-file MD5 or SHA-256. <strong>UNSIGNED-PAYLOAD</strong> in SigV4 is not the same as an unsigned <code>x-amz-checksum-*</code> header.</div>
+</details>
+</section>
+<div class="flex flex-wrap items-center gap-2">
+<button type="button" id="sl-back" class="rounded-lg border px-3 py-2">← Back</button>
+<button type="button" id="sl-next" class="rounded-lg px-4 py-2 font-semibold" style="background:var(--viz-accent-bg);color:var(--viz-text)">Next →</button>
+<button type="button" id="sl-play" class="rounded-lg border px-3 py-2">▶ Auto-play</button>
+<button type="button" id="sl-reset" class="rounded-lg border px-3 py-2">↻ Reset</button>
+<span id="sl-count" class="sl-muted text-sm ml-auto">Step 1</span>
+</div>
+<div class="w-full rounded-full h-1.5" style="background:var(--viz-border)"><div id="sl-progress" class="h-1.5 rounded-full" style="width:0%;background:var(--viz-accent)"></div></div>
+<div class="grid grid-cols-5 gap-1" aria-label="System components">
+<div id="sl-client" class="sl-node">📱<br>Client</div><div id="sl-service" class="sl-node">⚙️<br>File Service</div><div id="sl-db" class="sl-node">🗄️<br>PostgreSQL</div><div id="sl-s3" class="sl-node">☁️<br>Amazon S3</div><div id="sl-worker" class="sl-node">🔁<br>Worker</div>
+</div>
+<section class="rounded-xl border p-3 sm:p-4" style="border-color:var(--viz-border)">
+<div id="sl-route" class="sl-muted text-sm font-medium">Client → File Service</div>
+<h3 id="sl-title" class="font-semibold text-lg mt-1">1. Start upload</h3>
+<p id="sl-desc" class="text-sm mt-1">Client sends its claimed file size.</p>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+<div><div class="text-xs sl-muted font-semibold mb-1">REQUEST / ACTION</div><pre id="sl-req" class="sl-code"></pre></div>
+<div><div class="text-xs sl-muted font-semibold mb-1">RESPONSE / STATE</div><pre id="sl-res" class="sl-code"></pre></div>
+</div>
+<p id="sl-lesson" class="text-sm mt-3"></p>
+<div class="border rounded-lg p-2 mt-3 text-sm" style="border-color:var(--viz-border);background:var(--viz-panel)"><strong>Checks at this step</strong><div id="sl-checks" class="sl-muted mt-1"></div></div>
+</section>
+<section class="space-y-2">
+<div class="flex justify-between flex-wrap gap-2 text-sm"><strong>Multipart pieces</strong><span id="sl-plan" class="sl-muted">100 MiB ÷ 16 MiB → 7 parts</span></div>
+<div id="sl-parts" class="grid grid-cols-4 sm:grid-cols-7 gap-1.5"></div>
+<p id="sl-partnote" class="text-xs sl-muted"></p>
+</section>
+<div id="sl-outcome" class="text-sm border-t pt-3" style="border-color:var(--viz-border)" aria-live="polite"></div>
+<script>
+(function(){
+ const root=document.getElementById('s3lab');if(!root||root.dataset.ready)return;root.dataset.ready='1';
+ const el=id=>root.querySelector('#sl-'+id);
+ const presets={ok:[100,100,16],wrong:[1024,10240,64],missing:[100,100,16],corrupt:[100,100,16],tamper:[100,100,16],dbfail:[100,100,16]};
+ // SHA-256 in Base64 of 'part-1-demo-bytes' and 'part-1-altered-bytes'. These are toy payloads.
+ const GOOD='noaEtvGTlicIDZ5S86VRe5QIgD+sGmdrQVl2bgp7qPU=';
+ const BAD='67mKbzxIAUr7t3SlrvIzx59nB+nI83b5wMjbMfYf+Y4=';
+ let step=0,steps=[],timer=null,config=null,partSizes=[],expected=[],outcome='';
+ const fmt=n=>Number.isInteger(n)?String(n):n.toFixed(2);
+ function stop(){if(timer!==null){clearInterval(timer);timer=null;}el('play').textContent='▶ Auto-play';}
+ function clampInput(id,min,max,fallback){let x=Number(el(id).value);if(!Number.isFinite(x)||x<min)x=fallback;x=Math.min(max,Math.max(min,Math.floor(x)));el(id).value=x;return x;}
+ function make(){
+   const declared=clampInput('declared',1,25600,100),actual=clampInput('actual',1,25600,100),part=clampInput('size',5,5120,16),mode=el('scenario').value;
+   const checksumMode=el('binding').value;
+   const signed=checksumMode==='signed',unsigned=checksumMode==='unsigned',none=checksumMode==='none';
+   const n=Math.ceil(declared/part);config={declared,actual,part,mode,n,checksumMode};
+   const explanations={
+     signed:'Client calculates SHA-256 per part BEFORE asking for a URL. File Service signs x-amz-checksum-sha256. Client sends the SAME header with its PUT. S3 checks HMAC authorization AND hashes the received bytes. Changed header → signature failure; changed bytes → checksum failure.',
+     unsigned:'Deliberately invalid demonstration. File Service signs a URL without the x-amz-checksum-sha256 header, but client adds that x-amz-* header later. SigV4 requires planned x-amz-* headers in the signature, so S3 rejects the request. This is NOT the same as the valid SigV4 UNSIGNED-PAYLOAD setting.',
+     none:'Client does not send an explicit SHA-256 checksum. Pre-signed URL authorizes the part upload; S3 still uses its own integrity safeguards and by default supplies a CRC64NVME full-object checksum. There is no independently supplied client checksum for S3 to compare with the bytes.'
+   };
+   el('mode-help').textContent=explanations[checksumMode];
+   expected=Array.from({length:n},(_,i)=>Math.min(part,declared-i*part));
+   if(actual>declared){const base=Math.floor(actual/n),extra=actual%n;partSizes=Array.from({length:n},(_,i)=>base+(i<extra?1:0));}
+   else{let remaining=actual;partSizes=expected.map(size=>{const take=Math.min(remaining,size);remaining-=take;return take;}).filter(v=>v>0);}
+   if(mode==='missing'&&partSizes.length)partSizes.pop();
+   const invalidS3Part=partSizes.some((v,i)=>v>5120||(i<partSizes.length-1&&v<5));
+   const valid=partSizes.length===n&&partSizes.every((v,i)=>v===expected[i]);
+   const uploaded=partSizes.reduce((a,b)=>a+b,0);
+   const expText=`${n} expected parts; ${declared} MiB declared`;
+   const partText=`${partSizes.length} present parts; ${uploaded} MiB in S3`;
+   const signedHeaders=signed?'host%3Bx-amz-checksum-sha256':'host';
+   const demoUrl=`https://demo-bucket.s3.ap-south-1.amazonaws.com/uploads/file-123?partNumber=1&uploadId=upload-456&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=EXAMPLE%2F20261103%2Fap-south-1%2Fs3%2Faws4_request&X-Amz-Date=20261103T100000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=${signedHeaders}&X-Amz-Signature=DEMO_SIGNATURE`;
+   const sentDigest=mode==='tamper'?BAD:GOOD;
+   const s=(title,route,actors,req,res,lesson,phase,checks,final='')=>({title,route,actors,req,res,lesson,phase,checks,final});
+   steps=[
+    s('1. Client announces file size','Client → File Service',['client','service'],`POST /uploads\n{ "fileName":"video.mp4",\n  "sizeMiB":${declared} }`,`201 Created\n{ "fileId":"file-123",\n  "partSizeMiB":${part},\n  "expectedParts":${n} }`,'The client reports its file size. File Service chooses part size and expected part count; client metadata is untrusted.',0,'Checksums are separate from the expected file size and part count.'),
+    s('2. File Service opens S3 upload session','File Service → S3',['service','s3'],none?'CreateMultipartUpload\nBucket: demo-bucket\nKey: uploads/file-123\n(No explicit checksum algorithm requested)':'CreateMultipartUpload\nBucket: demo-bucket\nKey: uploads/file-123\nChecksumAlgorithm: SHA256\nChecksumType: COMPOSITE','200 OK\nUploadId: upload-456','The upload session is created before uploading parts. S3 does not know your application expected part count.',0,none?'S3 can assign the default CRC64NVME full-object checksum upon completion.':'SHA-256 COMPOSITE is the selected multipart checksum method. The client will provide per-part checksums.'),
+    s('3. File Service stores the upload contract','File Service → PostgreSQL',['service','db'],`INSERT upload_sessions\nfileId: file-123\nS3 uploadId: upload-456\nsizeMiB: ${declared}\npartSizeMiB: ${part}\nexpectedParts: ${n}`,'DB status: UPLOADING','PostgreSQL stores the intended layout; S3 stores actual part bytes.',0,'Expected sizes are checked separately from checksums.'),
+    s('4. Checksum preparation on client','Client (local)',['client'],none?'Client reads part 1 bytes.\nNo SHA-256 checksum is sent or signed.':'Read part 1 bytes\nSHA-256(part1 bytes)\nBase64-encode raw 32-byte digest\n\nToy example: SHA-256("part-1-demo-bytes")',none?'No client checksum value.':`checksumSHA256: ${GOOD}`,none?'S3 will not compare the bytes against a client-supplied SHA-256 value.':'Digest is a fingerprint of the part bytes, not a signature or encryption.',1,none?'S3 storage integrity is different from a client-provided expected digest.':'Digest must correspond to the bytes that will actually be uploaded.'),
+    s('5. Client requests a part URL','Client → File Service',['client','service'],signed?`POST /uploads/file-123/parts/urls\n{\n  "partNumber": 1,\n  "checksumSHA256": "${GOOD}"\n}`:'POST /uploads/file-123/parts/urls\n{ "partNumber": 1 }','File Service checks user access, part number, upload state and S3 upload ID.','To bind a checksum to the request, the File Service must know its value while signing.',1,signed?'The checksum is sent to File Service BEFORE generating the pre-signed URL.':unsigned?'The service does NOT sign the checksum header. Adding that x-amz-* header later is invalid.':'No checksum header is requested or signed.'),
+    s('6. File Service signs the pre-signed URL','File Service → Client (AWS SDK, local signing)',['service','client'],signed?`Java SDK v2 concept:\nUploadPartRequest.builder()\n .bucket("demo-bucket")\n .key("uploads/file-123")\n .uploadId("upload-456")\n .partNumber(1)\n .checksumSHA256("${GOOD}")\n .build();\npresigner.presignUploadPart(...);\n\nSigV4: canonical request → SHA-256\n→ StringToSign → HMAC signing key`:`Java SDK v2 concept:\nUploadPartRequest.builder()\n .bucket("demo-bucket")\n .key("uploads/file-123")\n .uploadId("upload-456")\n .partNumber(1)\n .build();\npresigner.presignUploadPart(...);\n\nSigV4: canonical request → SHA-256\n→ StringToSign → HMAC signing key`,`200 OK\n{\n  "method": "PUT",\n  "partNumber": 1,\n  "url": "${demoUrl}"${signed?`,\n  "requiredHeaders": {\n    "x-amz-checksum-sha256": "${GOOD}"\n  }`:''}\n}`,'File Service creates the HMAC-based URL signature using AWS credentials locally; neither the AWS secret nor derived signing key is transmitted.',1,signed?'X-Amz-SignedHeaders = host;x-amz-checksum-sha256, binding the expected digest to the URL.':unsigned?'X-Amz-SignedHeaders = host. A later unsigned x-amz-checksum-sha256 header is not valid SigV4.':'X-Amz-SignedHeaders = host. No explicit client checksum header is used.'),
+    s('7. Client sends part bytes to S3','Client → S3 (direct PUT)',['client','s3'],`PUT <pre-signed URL for part 1>\n${none?'(no checksum header)':`x-amz-checksum-sha256: ${sentDigest}`}\n\n<BODY: ${mode==='corrupt'?'altered/corrupted':'original'} part-1 bytes>\n\nOther parts follow same pattern.`,`S3 receives the request.\nChecksum supplied at PUT: ${none?'NO':'YES'}\nChecksum header signed: ${signed?'YES':'NO'}`,'Uploading bytes happens directly from the client to S3. The File Service does not relay part bytes.',2,signed?`Signed expected SHA-256: ${GOOD}\nPUT SHA-256 header:   ${sentDigest}`:unsigned?'x-amz-checksum-sha256 was NOT in SignedHeaders. This is the invalid case.':'No checksum header, so no client digest-to-bytes comparison can be performed.'),
+   ];
+   let failure='',response='',checks='';
+   if(unsigned){failure='UNSIGNED_AMZ_HEADER';response='Rejected: unsigned x-amz-checksum-sha256 header.\nSigV4 requires planned x-amz-* headers to be signed.\nGenerate a URL that signs the header or omit it.';checks='Signature authorization: FAIL\nPer-part checksum comparison: not reached.';}
+   else if(mode==='tamper'&&signed){failure='SIGNATURE_MISMATCH';response='HTTP 403 SignatureDoesNotMatch\nHeader value changed after signing.\nS3 does not accept this upload.';checks='SigV4: FAIL (signed header value changed)\nByte checksum: not reached.';}
+   else if((mode==='corrupt'||mode==='tamper')&&signed){failure='BAD_DIGEST';response='HTTP 400 BadDigest\nSigned checksum supplied in PUT does not match the digest of the received bytes.';checks=`SigV4: PASS\nSigned checksum: ${GOOD}\nS3 computed: ${BAD}\nByte checksum comparison: FAIL`;}
+   else if(invalidS3Part){failure='PART_SIZE';response='One or more part sizes violate S3 multipart limits.\nReject the invalid part or completion.\nRevise the upload plan.';checks='S3 multipart limits: FAIL';}
+   else if(none){response='HTTP 200 OK per part\nETag: "example-part-etag"\n(No client checksum returned for this mode.)\n\n'+partText;checks='SigV4: PASS\nNo client SHA-256 checksum comparison.\nS3 manages internal integrity and computes its default object checksum.\nCorrupted-byte scenario cannot be detected against an absent expected digest.';}
+   else{response='HTTP 200 OK per part\nETag: "example-part-etag"\nx-amz-checksum-sha256: <Base64>\n\n'+partText;checks='SigV4: PASS\nClient checksum = S3 SHA-256(part body): PASS';}
+   steps.push(s('8. S3 checks authorization and bytes','S3 (server-side)',['s3'],`Step A: Validate SigV4 using canonical request\nSigned headers: ${signed?'host, x-amz-checksum-sha256':'host'}\n\nStep B: ${signed?'Calculate SHA-256(received bytes); compare to supplied signed header.':unsigned?'Unsigned x-amz-* header violates signature requirements.':'No explicit client checksum to validate.'}`,response,'HMAC signature protects authorization and signed request fields. A checksum protects byte integrity relative to an expected digest. These are separate from verifying declared file size.',2,checks,failure?`UPLOAD BLOCKED — ${failure}`:''));
+   if(failure){outcome=`UPLOAD BLOCKED — ${failure}`;return;}
+   steps.push(s('9. File Service validates all uploaded parts','Client → File Service → S3 ListParts',['client','service','s3'],`POST /uploads/file-123/complete\n{ "parts": [\n  { "partNumber":1, "eTag":"..." }, ...\n] }\n\nFile Service calls S3 ListParts;\ncompares part numbers and sizes.`,valid?`VALID\n${expText}\n${partText}`:`409 Invalid upload contract\n${expText}\n${partText}`,'Part count and size are separate from checksums. An internally consistent checksum cannot prove an under-declared original file was fully sent.',3,valid?'All expected numbers and observed sizes match.':'Upload manifest does not match the declared plan.',valid?'':'BLOCKED — size or part-count mismatch'));
+   if(!valid){outcome='BLOCKED — size or part-count mismatch';return;}
+   steps.push(
+    s('10. Record completion intent','File Service → PostgreSQL',['service','db'],"UPDATE upload_sessions\nSET status='COMPLETING'\nWHERE file_id='file-123'\n  AND status='UPLOADING';",'1 row updated\nDB status: COMPLETING','Commit the intent before calling S3 so recovery can find an unknown completion outcome.',3,'Database state tracks the transition.'),
+    s('11. Assemble one object in S3','File Service → S3',['service','s3'],`CompleteMultipartUpload\nUploadId: upload-456\nOrdered part numbers + ETags${signed?'\nAnd part SHA-256 checksum values':''}\nExpected total size: ${declared} MiB\n${none?'S3 default checksum: CRC64NVME FULL_OBJECT':'Checksum type: SHA256 COMPOSITE'}`,`200 OK (completion response parsed)\nObject: uploads/file-123\nSize: ${declared} MiB`,'S3 concatenates parts in part-number order. A composite SHA-256 checksum is not identical to SHA-256 of the entire concatenated file.',4,none?'S3 stores a default full-object checksum.':'S3 uses the part checksum values for multipart completion.'),
+    s('12. Publish metadata','File Service → PostgreSQL',['service','db'],"UPDATE upload_sessions\nSET status='COMPLETED'\nWHERE file_id='file-123'\n  AND status='COMPLETING';",mode==='dbfail'?'DATABASE ERROR\nDB: COMPLETING\nS3: object exists':'1 row updated\nDB: COMPLETED','Only verified files marked COMPLETED in PostgreSQL appear in the user-facing file list.',5,mode==='dbfail'?'S3 and DB disagree temporarily.':'Object exists and database is updated.',mode==='dbfail'?'NEEDS RECONCILIATION':'SUCCESS — file available')
+   );
+   if(mode==='dbfail')steps.push(s('13. Repair failed DB update','Worker → S3 HeadObject → PostgreSQL',['worker','s3','db'],`Find stuck COMPLETING upload\nHEAD uploads/file-123\nVerify expected size + upload identity\nVerify available checksum metadata\nUpdate DB using conditional write`,'HeadObject: 200 OK\nObject matches expected upload\nDB status → COMPLETED','Background reconciliation repairs the dual-write problem without retransmitting file parts.',6,'Recovery successful.','RECOVERED — file available'));
+   outcome=mode==='dbfail'?'RECOVERED':'SUCCESS';
+ }
+ function render(){
+   const data=steps[step];if(!data)return;
+   el('count').textContent=`Step ${step+1} of ${steps.length}`;
+   el('progress').style.width=((step+1)/steps.length*100)+'%';
+   el('title').textContent=data.title;el('route').textContent=data.route;
+   el('desc').textContent=data.phase===0?'Control-plane setup':data.phase===1?'Checksum and URL signing':data.phase===2?'Client-to-S3 data transfer':data.phase===3?'Completion validation':data.phase===4?'S3 assembly':data.phase===5?'PostgreSQL metadata':'Recovery';
+   el('req').textContent=data.req;el('res').textContent=data.res;
+   el('lesson').textContent='WHY: '+data.lesson;el('checks').textContent=data.checks;
+   el('checks').style.whiteSpace='pre-wrap';
+   ['client','service','db','s3','worker'].forEach(id=>el(id).classList.toggle('sl-active',data.actors.includes(id)));
+   const c=config;el('plan').textContent=`${c.declared} MiB ÷ ${c.part} MiB → ${c.n} parts`;
+   const box=el('parts');box.innerHTML='';const show=Math.min(c.n,21);
+   for(let i=0;i<show;i++){
+      const partEl=document.createElement('div');partEl.className='sl-part';
+      const has=data.phase>=2;const isRejected=has&&((c.checksumMode==='signed'&&(c.mode==='corrupt'||c.mode==='tamper'))||c.checksumMode==='unsigned')&&i===0;
+      const isPending=has&&((c.checksumMode==='signed'&&(c.mode==='corrupt'||c.mode==='tamper'))||c.checksumMode==='unsigned')&&i>0;
+      const isMissing=has&&(i>=partSizes.length||isPending);
+      const isBad=has&&(i<partSizes.length&&partSizes[i]!==expected[i]);
+      partEl.style.borderStyle=isMissing?'dashed':'solid';if(isBad)partEl.style.borderWidth='2px';
+      partEl.textContent='P'+(i+1)+' · '+fmt(expected[i])+' MiB'+(has?'\n'+(isRejected?'rejected':isMissing?'missing':isBad?'got '+fmt(partSizes[i]):'received'):'');
+      partEl.style.whiteSpace='pre-line';box.appendChild(partEl);
+   }
+   el('partnote').textContent=c.n>show?`Showing first ${show} of ${c.n} parts. `:' ';
+   if(data.phase>=2)el('partnote').textContent+='S3-observed byte sizes are checked against the server upload plan.';
+   const finished=step===steps.length-1;
+   el('outcome').textContent=finished?(data.final||outcome):`State: ${data.phase<2?'PREPARING':data.phase===2?'UPLOADING':data.phase===3?'VALIDATING / COMPLETING':data.phase===4?'S3 COMPLETED':'POSTGRESQL / RECOVERY'} · Use Next to continue.`;
+   el('back').disabled=step===0;el('next').disabled=finished;
+   el('back').style.opacity=step===0?'.45':'1';el('next').style.opacity=finished?'.45':'1';
+ }
+ function rebuild(){stop();make();step=0;render();}
+ el('scenario').addEventListener('change',()=>{const p=presets[el('scenario').value];el('declared').value=p[0];el('actual').value=p[1];el('size').value=p[2];rebuild();});
+ ['declared','actual','size','binding'].forEach(id=>el(id).addEventListener('change',rebuild));
+ el('next').addEventListener('click',()=>{if(step<steps.length-1){step++;render();}if(step===steps.length-1)stop();});
+ el('back').addEventListener('click',()=>{stop();if(step>0){step--;render();}});
+ el('reset').addEventListener('click',rebuild);
+ el('play').addEventListener('click',()=>{if(timer!==null){stop();return;}if(step>=steps.length-1)step=0;render();el('play').textContent='⏸ Pause';timer=setInterval(()=>{if(step<steps.length-1){step++;render();}if(step===steps.length-1)stop();},1900);});
+ rebuild();
+})();
+</script>
+<p class="sl-muted text-xs mt-3">Simulation only; the example URLs and signatures are placeholders. Example SHA-256 values represent toy strings, not 16 MiB payloads. No AWS calls are made. See <a href="https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sigv4-query-string-auth.html" target="_blank" rel="noreferrer">SigV4 query signing</a> and <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html" target="_blank" rel="noreferrer">multipart checksums</a>.</p>
+</div>
+</body></html>
