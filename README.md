@@ -10,8 +10,11 @@ A collection of simulations for learning software engineering and distributed sy
 | --- | --- | --- |
 | S3 Multipart Upload | Part sizes, checksum modes, signatures, and failure scenarios | [Open](https://tharunworks.github.io/simulations/s3-multipart-upload/) |
 
+| Manifest Quest | HLS manifests, bitrate selection, buffering, CDN cache hits and S3 request flow | [Open](https://tharunworks.github.io/simulations/manifest-quest/) |
+
 ## Structure
 
+- `manifest-quest/index.html`: streaming and manifest simulation.
 - `index.html`: collection homepage.
 - `s3-multipart-upload/index.html`: S3 multipart upload simulation.
 
