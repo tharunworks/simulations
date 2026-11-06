@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Step-by-step chess CAP simulation: network partitions, competing moves from two devices, stale replica reads, and safe failover.">
+<title>Chess Online: CAP & Consistency — Simulations</title>
+<style>
+:root{color-scheme:light;--ink:#17263b;--muted:#52627a;--line:#d6e1ee;--blue:#2452a3;--good:#08745c;--bad:#a52e35}
+*{box-sizing:border-box}body{margin:0;background:#f5f7fc;color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1070px;margin:auto;padding:26px 18px 60px}a{color:var(--blue)}a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #f0a822;outline-offset:3px}
+h1{font-size:clamp(29px,5vw,50px);line-height:1.13;margin:10px 0}h2{font-size:23px;margin:0 0 11px}h3{margin:0 0 6px;font-size:17px}p{margin:7px 0 13px}
+.lead{font-size:18px;color:var(--muted);max-width:780px}.back{text-decoration:none;font-weight:700;font-size:14px}
+.kicker{color:var(--blue);font-weight:800;letter-spacing:.13em;text-transform:uppercase;font-size:12px;margin-top:23px}
+.panel{background:white;border:1px solid var(--line);border-radius:16px;padding:22px;margin-top:19px;box-shadow:0 7px 22px #1e34500b}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:17px;margin:17px 0}.label{font-weight:800;font-size:13px;display:block;margin-bottom:8px}
+.buttons{display:flex;flex-wrap:wrap;gap:7px}button{cursor:pointer;font:inherit;border:1px solid #aec3db;padding:9px 12px;background:white;color:var(--ink);border-radius:9px;font-weight:650}
+button[aria-pressed="true"],button.primary{background:var(--blue);border-color:var(--blue);color:white}button:disabled{opacity:.45;cursor:not-allowed}
+.progress{display:flex;gap:5px;margin-top:17px}.progress i{flex:1;height:6px;border-radius:5px;background:#e0e8f3}.progress i.past{background:var(--good)}.progress i.current{background:var(--blue)}
+#stepTitle{margin-top:10px;font-weight:800;font-size:17px}
+#network{text-align:center;background:#ecf4fe;border:1px dashed #85a4ca;border-radius:9px;padding:9px;margin:12px 0;font-weight:650}
+#network.broken{background:#fff2ef;border-color:#dd9c93;color:var(--bad)}
+.nodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:11px}
+.node{background:#fbfcff;border:1px solid var(--line);border-radius:12px;padding:13px;min-width:0}
+.nhead{display:flex;justify-content:space-between;align-items:center;gap:7px}.sub{font-size:12px;color:var(--muted);min-height:19px}
+.ver{font:800 12px ui-monospace,Consolas,monospace;padding:4px 8px;background:#e7eef9;border-radius:6px}
+.board{margin:12px auto;width:min(100%,220px);aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);overflow:hidden;border:2px solid #6c5446}
+.square{display:grid;place-items:center;font-size:clamp(19px,2.7vw,27px);line-height:1}
+.square.light{background:#f0dfc5}.square.dark{background:#a88264}.square.white{color:white;text-shadow:1px 1px 2px black,-1px -1px 2px black}
+.square.black{color:#151515;text-shadow:1px 1px 1px #fff}.square.last{outline:3px solid #3475ad;outline-offset:-3px}
+.nodeResult{font-size:13px;font-weight:750;text-align:center;min-height:34px}.bad{color:var(--bad)}.good{color:var(--good)}.muted{color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:13px;margin-top:14px}
+.explanation{background:#edf4ff;border-left:4px solid var(--blue);border-radius:8px;padding:14px}
+.events{background:#f8faff;border:1px solid var(--line);border-radius:8px;padding:14px}
+.events ol{margin:8px 0;padding-left:20px;font-size:13px}.events li{margin:4px 0}
+.nav{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:15px}.counter{font-size:13px;color:var(--muted);margin-left:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3fa}.scroll{overflow-x:auto}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+details{border:1px solid var(--line);padding:13px;border-radius:10px;background:#fff}
+summary{font-weight:800;cursor:pointer}details p,details li{font-size:14px;color:#3c4b60}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 ui-monospace,Consolas,monospace;background:#1a2b44;color:white;padding:13px;border-radius:8px}
+.quiz{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.quiz>div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+footer{margin-top:26px;font-size:13px;color:var(--muted)}
+@media(max-width:680px){main{padding:18px 11px 40px}.panel{padding:14px}.controls,.grid2{grid-template-columns:1fr}.counter{margin-left:0;width:100%}.square{font-size:clamp(20px,5vw,27px)}}
+</style>
+</head>
+<body><main>
+<a class="back" href="../">← All simulations</a>
+<div class="kicker">Distributed systems · Interactive failure lab</div>
+<h1>Online Chess: Consistency vs Availability</h1>
+<p class="lead">Why can a <strong>turn-based game</strong> have conflicting writes? Compare what happens when the same player submits different moves from two devices during a network partition.</p>
+<p class="muted"><small>Teaching model of architecture choices. It does not claim to reproduce Lichess or Chess.com's internal failure handling.</small></p>
+<section class="panel" aria-label="Interactive simulation">
+<h2>1. Run the simulation</h2>
+<p>Choose a scenario and policy. Tap <strong>Next step</strong> to advance; switch AP/CP and compare the outcomes. Every step shows what each server knows.</p>
+<div class="controls"><div><span class="label">Scenario</span><div class="buttons" id="scenarioControls" role="group" aria-label="Scenario"></div></div>
+<div><span class="label">Failure policy</span><div class="buttons" role="group" aria-label="Failure policy"><button data-policy="AP" aria-pressed="true">Favor availability</button><button data-policy="CP" aria-pressed="false">Favor consistency</button></div></div></div>
+<div class="progress" id="progress" aria-hidden="true"></div>
+<div id="stepTitle" aria-live="polite"></div><div id="network"></div>
+<div id="nodes" class="nodes"></div>
+<div class="grid2"><div class="explanation"><h3>What happened? Why?</h3><p id="description" aria-live="polite"></p><strong id="outcome"></strong></div>
+<div class="events"><h3>Event log</h3><ol id="eventLog"></ol></div></div>
+<div class="nav"><button id="backStep">← Back</button><button class="primary" id="nextStep">Next step →</button><button id="restart">↺ Restart</button><span class="counter" id="counter"></span></div>
+</section>
+<section class="panel"><h2>2. Key comparison</h2><p><strong>Game invariant:</strong> a successfully acknowledged move must belong to one authoritative, ordered game history.</p>
+<div class="scroll"><table><thead><tr><th>Operation</th><th>Availability preference</th><th>Consistency preference</th></tr></thead><tbody>
+<tr><td><strong>Submit move</strong></td><td>Unsafe independent writers may both accept moves for the same turn.</td><td>Only an authorized writer commits; others delay or refuse.</td></tr>
+<tr><td><strong>Read live board</strong></td><td>Serve replica snapshot, possibly stale.</td><td>Require authoritative or proven-fresh state.</td></tr>
+<tr><td><strong>Watch as spectator</strong></td><td>Serving an older position is often acceptable.</td><td>Usually not required.</td></tr>
+<tr><td><strong>Promote replica</strong></td><td>Unsafe promotion can produce two primaries.</td><td>Fence old writer, then promote under a recovery policy.</td></tr>
+</tbody></table></div></section>
+<section class="panel"><h2>3. Notes and edge cases</h2><div class="notes">
+<details open><summary>Why the same player on different devices matters</summary>
+<p><strong>Concrete example:</strong> Alice is White and logged in on a laptop and a phone. Both game servers think it is White's first turn. A network partition prevents synchronization.</p>
+<p>Her laptop submits <strong>1. e4</strong> to Server A. Her phone submits <strong>1. d4</strong> to Server B. Each move is legal <em>individually</em> from the starting position, so independent servers might acknowledge both.</p>
+<p>When communication returns, both cannot be move 1 in one game. One acknowledged move must be rolled back or rejected after the fact. <strong>Turn-based gameplay does not prevent concurrent requests, retries, or multiple sessions.</strong></p>
+</details>
+<details><summary>Vocabulary: client, partition, operation</summary>
+<p><strong>Client:</strong> Alice's phone/laptop or Bob's browser.</p><p><strong>Operation:</strong> submit a move, fetch current board, read spectator view.</p>
+<p><strong>Partition:</strong> a communication failure between servers that may remain running.</p>
+<p><strong>CAP availability:</strong> each request received by a nonfailed node eventually completes with a successful response; returning an error does not meet this definition.</p>
+<p><strong>CAP consistency:</strong> linearizability: successful operations appear to execute atomically in an order compatible with real-time completion.</p>
+</details>
+<details><summary>How to prevent conflicting moves</summary>
+<p>Use <strong>one authoritative game writer</strong>, optimistic version checks, idempotency keys and fencing during leadership changes.</p>
+<pre>POST /games/123/moves
+{
+  "requestId": "alice-001",
+  "expectedVersion": 10,
+  "uci": "e2e4"
+}
+
+BEGIN;
+SELECT * FROM games
+WHERE id = 123 FOR UPDATE;
+-- Verify writer authority and expectedVersion.
+-- Verify player, turn, chess move legality.
+-- Deduplicate requestId.
+-- Append move; increment version atomically.
+COMMIT;</pre>
+<p>A version check protects against racing writers sharing the same database. It does <strong>not</strong> prevent independently writable primaries from diverging; that requires controlling leadership and failover.</p>
+</details>
+<details><summary>PostgreSQL with two async replicas</summary>
+<p>The primary commits moves; R1 and R2 replay write-ahead logs asynchronously. A replica can return a stale board even without a partition. During a partition, it may remain stale until it reconnects.</p>
+<p>Asynchronous primary acknowledgment does not prove that either standby has received a move. If the primary dies before shipping it, failover to a lagging replica can <strong>lose an acknowledged move</strong>. That is a durability/failover problem in addition to stale-read consistency.</p>
+<p>Read from the authoritative primary, or verify a replica's catch-up position, when freshness is required.</p>
+</details>
+<details><summary>What changes during failover?</summary>
+<p>If a standby cannot reach the primary, it cannot tell whether the primary is dead or merely isolated. Promoting the standby without fencing the old primary can create <strong>split brain</strong>.</p>
+<p>Failover coordination can use a leader lease, fencing and/or a quorum-based controller. If the required authority or replicated state is unavailable, pause move commits instead of accepting conflicting results. Quorum and synchronous replication are distinct design decisions.</p>
+</details>
+<details><summary>Clock expiry edge case</summary>
+<p>Another conflict is a player move versus a server-generated timeout. Different servers could acknowledge both a move and a loss on time. A single authoritative ordering and clock policy are required. Whether the clock pauses during disconnection is a separate product decision.</p>
+</details>
+<details><summary>How to evaluate the tradeoff</summary>
+<div class="scroll"><table><thead><tr><th>Metric</th><th>What it measures</th></tr></thead><tbody>
+<tr><td>Conflicting acknowledged moves</td><td>Safety violations; target zero</td></tr>
+<tr><td>Lost acknowledged moves</td><td>Durability violations; target zero if promised</td></tr>
+<tr><td>Move acknowledgment p95/p99</td><td>Coordination cost</td></tr>
+<tr><td>Move submission availability</td><td>Requests served during failures</td></tr>
+<tr><td>Replica replay lag / recovery time</td><td>Read staleness and failover exposure</td></tr>
+</tbody></table></div><p>These are suggested metrics, not benchmark observations.</p>
+</details>
+<details><summary>Interview: WHAT → WHY → HOW → TRADE-OFF</summary>
+<p><strong>WHAT:</strong> assign one authoritative writer per game.</p><p><strong>WHY:</strong> Alice can submit different moves from two devices while partitioned servers both believe it is her turn.</p>
+<p><strong>HOW:</strong> validate versions and legality, commit atomically, deduplicate retries and fence old writers during failover.</p>
+<p><strong>TRADE-OFF:</strong> pause or reject moves during some partitions, but permit stale spectator views. Choose independent replication guarantees for acknowledged-move durability.</p>
+</details>
+<details><summary>What the simulator does and does not model</summary>
+<p>These deterministic step-by-step snapshots show a standard chess starting position and the legal alternative first moves e4/d4. They do not implement an entire chess engine, real PostgreSQL, consensus, or a timing-sensitive network.</p>
+<p>In the consistency-preference mode, Server A is assumed to retain authority. A quorum-managed A would also have to stop committing if it lost its required quorum. The AP and CP buttons illustrate behavior <em>per operation</em>; they do not formally classify a production product.</p>
+</details>
+</div></section>
+<section class="panel"><h2>4. Quick checks</h2><div id="quiz" class="quiz"></div></section>
+<section class="panel"><h2>5. DIY and reference material</h2>
+<p>Implement a Java move service with PostgreSQL, a version column, a unique move request ID, and two web server instances. Inject retries, concurrent move submissions, and simulated leader changes.</p>
+<p>Read: <a href="https://www.postgresql.org/docs/current/high-availability.html">PostgreSQL: High Availability</a>, <a href="https://www.postgresql.org/docs/current/warm-standby.html">Streaming Replication and Standby</a>, and Martin Kleppmann's <em>Designing Data-Intensive Applications</em>.</p>
+<p>Open source: <a href="https://github.com/lichess-org/lila">Lichess (lila)</a>, <a href="https://github.com/patroni/patroni">Patroni</a>, <a href="https://github.com/etcd-io/etcd">etcd</a>.</p>
+</section><footer><a href="../">← All simulations</a> · <a href="https://github.com/tharunworks/simulations">Source repository</a></footer>
+</main>
+<script>
+"use strict";
+const initial=["rnbqkbnr","pppppppp","........","........","........","........","PPPPPPPP","RNBQKBNR"];
+const glyph={r:"♜",n:"♞",b:"♝",q:"♛",k:"♚",p:"♟︎",R:"♖",N:"♘",B:"♗",Q:"♕",K:"♔",P:"♙"};
+const scenarios={
+devices:{title:"Same player · 2 devices",steps:["Both servers agree","Communication fails","Alice's laptop plays e4","Alice's phone plays d4","Communication recovers"],text:{
+AP:["A and B both have version 0. It is White's turn on each server.","A and B lose contact. Alice remains connected to both using different devices.","A accepts e4 and tells her laptop that the move is committed.","B has not seen e4. It accepts d4 on the phone as another first move. Both were individually legal.","A and B each acknowledged a different first move. Reconciliation must break at least one prior promise."],
+CP:["A and B both have version 0; only A has commit authority.","Servers lose contact. A retains commit authority in this simplified model.","A accepts and commits Alice's e4.","B knows it cannot commit independently, so it refuses or delays Alice's d4.","B catches up to A. Only e4 was ever acknowledged as committed."]},
+events:{AP:["Both at v0","A ↮ B","A ACK 1. e4","B ACK 1. d4","Conflicting acknowledgments"],CP:["A is writer","A ↮ B","A ACK 1. e4","B refuses 1. d4","B catches up to 1. e4"]}},
+reads:{title:"Postgres · stale reads",steps:["Primary and two replicas","Primary commits e4","R1 catches up","R2 gets isolated","R2 reconnects"],text:{
+AP:["P is the only writer. R1 and R2 are async replicas; all have version 0.","P commits e4. Its acknowledgment does not wait for the standbys.","R1 replays the change. R2 has not yet received it.","Bob can reach only R2. R2 responds with the old board to keep reads available.","R2 reconnects and replays the change. Bob's earlier read was stale."],
+CP:["P is the only writer. R1 and R2 are async replicas; all have version 0.","P commits e4. Neither standby has caught up yet.","R1 replays e4; R2 is still behind.","Bob can reach only R2. It cannot guarantee current state and refuses or delays a fresh read.","R2 catches up. Current reads can resume."]},
+events:{AP:["All at v0","P ACK e4 / v1","R1 replays v1","R2 returns stale v0","R2 replays v1"],CP:["All at v0","P ACK e4 / v1","R1 replays v1","R2 refuses freshness read","R2 replays v1"]}},
+failover:{title:"Primary · unsafe failover",steps:["Primary and two replicas","Primary commits e4","Primary isolated","Attempt replica promotion","Network recovers"],text:{
+AP:["P is primary; replicas are asynchronously replicating.","P acknowledges e4, but neither standby received it yet.","Standbys lose contact with P. P may still be alive and accepting requests.","R1 is unsafely promoted without fencing P, and separately acknowledges d4.","P and R1 have different acknowledged moves. The system has split brain."],
+CP:["P is primary; replicas are asynchronously replicating.","P acknowledges e4, but neither standby received it yet.","P is isolated. Not being reachable does not prove it is dead.","The failover controller does not promote R1 without safely terminating P's authority and resolving recovery conditions.","P reconnects and standbys catch up. If P were permanently lost, async replication could still lose e4."]},
+events:{AP:["P writer; all v0","P ACK e4 / v1","P isolated","R1 ACK d4 / v1","Split brain"],CP:["P writer; all v0","P ACK e4 / v1","P isolated","Unsafe promotion withheld","Standbys replay e4"]}}
+};
+let scenario="devices",policy="AP",step=0;
+const el=id=>document.getElementById(id);
+function state(){
+let s={partition:false,nodes:scenario==="devices"?[{name:"Server A",client:"Alice · laptop",move:""},{name:"Server B",client:"Alice · phone",move:""}]:[{name:"Primary P",client:"Authoritative writer",move:""},{name:"Replica R1",client:"Async standby",move:""},{name:"Replica R2",client:"Async standby",move:""}]};
+let n=s.nodes;
+for(let k=1;k<=step;k++){
+ if(scenario==="devices"){
+  if(k===1)s.partition=true;
+  if(k===2)n[0].move="e4";
+  if(k===3&&policy==="AP")n[1].move="d4";
+  if(k===4){s.partition=false;if(policy==="CP")n[1].move="e4";}
+ }else if(scenario==="reads"){
+  if(k===1)n[0].move="e4";
+  if(k===2)n[1].move="e4";
+  if(k===3)s.partition=true;
+  if(k===4){s.partition=false;n[2].move="e4";}
+ }else{
+  if(k===1)n[0].move="e4";
+  if(k===2)s.partition=true;
+  if(k===3&&policy==="AP"){n[1].move="d4";n[1].client="Unsafe promoted writer";}
+  if(k===4){s.partition=false;if(policy==="CP"){n[1].move="e4";n[2].move="e4";}}
+ }
+}
+return s;
+}
+function board(move){
+let squares=initial.map(r=>[...r]);
+const c=move==="e4"?4:move==="d4"?3:-1;
+if(c>=0){squares[6][c]=".";squares[4][c]="P";}
+let out='<div class="board" role="img" aria-label="'+(move?"Chessboard after 1. "+move:"Starting chessboard")+'">';
+for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+ const piece=squares[r][f],color=(r+f)%2?"dark":"light";
+ const tone=piece==="."?"":piece===piece.toUpperCase()?"white":"black";
+ out+='<span class="square '+color+' '+tone+(f===c&&(r===6||r===4)?" last":"")+'">'+(glyph[piece]||"")+'</span>';
+}
+return out+"</div>";
+}
+function render(){
+ const data=scenarios[scenario],s=state(),ns=s.nodes;
+ document.querySelectorAll("[data-scenario]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.scenario===scenario)));
+ document.querySelectorAll("[data-policy]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.policy===policy)));
+ el("progress").innerHTML=data.steps.map((_,i)=>'<i class="'+(i===step?"current":i<step?"past":"")+'"></i>').join("");
+ el("stepTitle").textContent="Step "+(step+1)+" / "+data.steps.length+": "+data.steps[step];
+ el("network").className=s.partition?"broken":"";
+ el("network").textContent=s.partition?"✕ Network partition: some nodes cannot communicate":"✓ Network connected";
+ el("nodes").innerHTML=ns.map((n,i)=>{
+  let summary=n.move?"Committed 1. "+n.move:"No move committed";
+  if(scenario==="devices"&&policy==="CP"&&step===3&&i===1)summary="d4 NOT committed";
+  if(scenario==="reads"&&i===2&&step===3)summary=policy==="AP"?"Served stale board (v0)":"Fresh read refused";
+  if(scenario==="failover"&&policy==="CP"&&step===3&&i===1)summary="Unsafe promotion withheld";
+  let conflict=(scenario!=="reads"&&policy==="AP"&&step>=3&&i===1);
+  return '<div class="node"><div class="nhead"><strong>'+n.name+'</strong><span class="ver">v'+(n.move?1:0)+'</span></div><p class="sub">'+n.client+'</p>'+board(n.move)+'<div class="nodeResult '+(conflict?"bad":n.move?"good":"muted")+'">'+summary+'</div></div>';
+ }).join("");
+ el("description").textContent=data.text[policy][step];
+ let bad=policy==="AP"&&scenario!=="reads"&&step===4;
+ el("outcome").textContent=step===4?(bad?"✕ Two incompatible acknowledged moves":"✓ Simulation complete"):step===3&&(scenario!=="reads"&&policy==="AP")?"⚠ Conflicting moves accepted":step===3&&policy==="CP"?"Commit/read withheld to protect consistency":"";
+ el("outcome").className=bad?"bad":"good";
+ el("eventLog").innerHTML=data.events[policy].slice(0,step+1).map(s=>'<li>'+s+'</li>').join("");
+ el("backStep").disabled=step===0;el("nextStep").disabled=step===4;
+ el("counter").textContent=(step+1)+" / 5";
+}
+for(const [key,v] of Object.entries(scenarios)){
+const button=document.createElement("button");button.textContent=v.title;button.dataset.scenario=key;
+button.addEventListener("click",()=>{scenario=key;step=0;render();});
+el("scenarioControls").append(button);
+}
+document.querySelectorAll("[data-policy]").forEach(b=>b.addEventListener("click",()=>{policy=b.dataset.policy;step=0;render();}));
+el("backStep").addEventListener("click",()=>{step=Math.max(0,step-1);render();});
+el("nextStep").addEventListener("click",()=>{step=Math.min(4,step+1);render();});
+el("restart").addEventListener("click",()=>{step=0;render();});
+const quiz=[
+["Can one player submit two legal moves for the same turn?","Yes. Two sessions on different devices, or a retry that changes the move, can race across disconnected servers."],
+["Does async replication require a partition to create stale reads?","No. Even under normal operation a standby can lag behind a committed primary write."],
+["Is single-writer consistency the same as durable failover?","No. Asynchronous standby promotion can lose an acknowledged commit, even without simultaneous primaries."]
+];
+el("quiz").innerHTML=quiz.map(([q,a])=>'<div><strong>'+q+'</strong><details style="margin-top:8px"><summary>Reveal answer</summary><p>'+a+'</p></details></div>').join("");
+render();
+</script>
+</body></html>
