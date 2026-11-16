@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1426"><title>Chat Delivery Architecture Lab — WebSocket, Redis & Scaling</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1426;--card:#111e33;--card2:#16273f;--line:#34465e;--text:#f0f5ff;--muted:#b1c0d3;--cyan:#5bdbd0;--blue:#8ebaff;--gold:#f3c978;--red:#ff9a9a;--green:#9be3ab}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at top left,#19334e 0,transparent 39%),var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}a{color:var(--cyan)}button,select,input{font:inherit}button,select{cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--gold);outline-offset:3px}button{background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px 14px}button:hover:not(:disabled){border-color:var(--cyan)}button:disabled{opacity:.4;cursor:not-allowed}.primary{background:#12665f;border-color:#41c6b9;font-weight:700}.page{max-width:1370px;margin:auto;padding:26px 22px 70px}.top{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:start}.eyebrow{color:var(--cyan);text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:750}h1{margin:7px 0;font-size:clamp(26px,4vw,39px);line-height:1.15}h2{font-size:19px;margin:0 0 12px}h3{font-size:15px;margin:0 0 6px}p{margin:7px 0 13px;color:var(--muted)}.intro{max-width:850px}.tag{border:1px solid #3e5c6c;padding:3px 9px;border-radius:100px;color:var(--cyan);font-size:12px;display:inline-block}.card{background:linear-gradient(145deg,rgba(23,40,64,.98),rgba(15,27,45,.98));border:1px solid var(--line);border-radius:15px;padding:18px;min-width:0}.controls{margin:20px 0;display:grid;grid-template-columns:minmax(230px,2.2fr) minmax(150px,1fr) minmax(140px,1fr) minmax(140px,1fr);gap:15px}.field label{display:block;font-size:12px;color:var(--muted);font-weight:700;margin-bottom:6px}.field select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--text)}.field input[type=range]{width:100%;accent-color:var(--cyan)}.field .val{font-variant-numeric:tabular-nums;color:var(--cyan);font-size:12px}.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(330px,.85fr);gap:16px}.mapheader{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:12px}.mini{font-size:12px;color:var(--muted)}.topology{display:grid;gap:8px}.layer{border:1px dashed #3a5570;border-radius:11px;padding:11px;background:#0a192c72}.layername{text-transform:uppercase;letter-spacing:.1em;font-size:11px;color:#a5b9d2;margin-bottom:9px}.nodrow{display:grid;grid-template-columns:1fr 1fr;gap:10px}.nodrow.three{grid-template-columns:repeat(3,minmax(0,1fr))}.node{background:var(--card);border:1px solid #405570;border-radius:10px;padding:10px;transition:background .2s,border .2s;min-height:72px}.node.focus{border-color:var(--cyan);background:#17423e;box-shadow:0 0 0 1px #49c6ad88}.node.off{opacity:.52;border-style:dashed}.node .name{font-weight:700;font-size:13px}.node .detail{font-size:12px;color:var(--muted);word-break:break-word}.node .state{margin-top:3px;font-size:11px;color:var(--cyan)}.route{margin:10px 0;min-height:48px;border:1px solid #416b7b;border-radius:9px;background:#0c2738;padding:10px}.route strong{font-size:12px;color:var(--cyan)}.route .path{font-size:13px;margin-top:4px;overflow-wrap:anywhere}.route .path span{color:var(--gold)}.footergrid{margin-top:13px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.metric{border:1px solid var(--line);border-radius:9px;padding:9px;background:#102038}.metric .num{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}.metric .lbl{font-size:11px;color:var(--muted)}.side{display:flex;flex-direction:column;gap:15px}.smallcaps{font-size:11px;letter-spacing:.1em;color:var(--cyan);font-weight:800;text-transform:uppercase}.step-title{font-size:23px;font-weight:750;margin:5px 0 9px}.why{color:#d0deeb;margin:4px 0 10px}.warn{color:var(--gold);font-size:13px;margin-top:10px}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.progress{height:6px;background:#283d55;border-radius:20px;overflow:hidden;margin-top:15px}.progress>div{height:100%;background:var(--cyan);width:0;transition:width .2s}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}pre{margin:9px 0;background:#091423;border:1px solid #2e435e;border-radius:9px;padding:12px;white-space:pre-wrap;overflow:auto;max-height:255px;font-size:12px;line-height:1.55;color:#bfe5ff;overflow-wrap:anywhere}.log{max-height:240px;overflow:auto;border:1px solid #334964;border-radius:9px;padding:8px;background:#0b1729}.logitem{padding:6px 9px;border-bottom:1px solid #2a4057;font-size:12px;display:flex;gap:7px}.logitem:last-child{border:0}.logitem b{color:var(--cyan);font-variant-numeric:tabular-nums}.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.statline{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.statline:last-child{border:0}.statline b{font-variant-numeric:tabular-nums}.section{margin-top:22px}.notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}details{background:var(--card);border:1px solid var(--line);padding:13px;border-radius:11px}details summary{cursor:pointer;font-weight:750;color:#f0f5ff}details p,details li{font-size:13px}.tabs{display:flex;gap:7px;flex-wrap:wrap;margin:11px 0}.tabs .pick{border-color:var(--cyan);color:var(--cyan)}.question{border:1px solid var(--line);padding:12px;border-radius:10px;background:#101f33}.answer{margin-top:8px;display:none;color:#b4e7c2;font-size:13px}.question.open .answer{display:block}.qbtn{margin-top:7px;font-size:12px;padding:6px 10px}.compare{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px;min-width:570px}th,td{border-bottom:1px solid var(--line);text-align:left;padding:9px;vertical-align:top}th{color:var(--cyan)}.sr{position:absolute;left:-9999px}footer{margin-top:22px;color:var(--muted);font-size:12px}ul{padding-left:20px}li{margin:4px 0}
+@media(max-width:1020px){.controls{grid-template-columns:1fr 1fr}.layout{grid-template-columns:1fr}.notes{grid-template-columns:1fr 1fr}}@media(max-width:650px){.page{padding:16px 11px 42px}.card{padding:13px}.controls{grid-template-columns:1fr 1fr;gap:10px}.field:first-child{grid-column:1/-1}.info-grid,.notes{grid-template-columns:1fr}.footergrid{grid-template-columns:1fr 1fr}.nodrow.three{grid-template-columns:repeat(2,1fr)}.node{min-height:65px;padding:8px}pre{font-size:11px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="page">
+<header class="top">
+<div><div class="eyebrow">Distributed systems / interactive learning lab</div><h1>From one Chat Server to a WebSocket Fleet</h1><p class="intro">Follow Alice's message to Bob. Step through connection ownership, REST vs WebSocket ingestion, durable storage, Redis Pub/Sub, broadcast vs targeted routing, and failures. All network behavior is <strong>modeled locally</strong> — no actual server is contacted.</p></div>
+<a href="../" style="margin-top:8px">← All simulations</a>
+</header>
+<section class="card controls" aria-label="Simulation controls">
+<div class="field"><label for="scenario">Scenario — choose an architectural problem</label><select id="scenario">
+<option value="single">1 · One Spring Boot chat server</option>
+<option value="split">2 · Two servers, no internal routing</option>
+<option value="broadcast">3 · Redis Pub/Sub broadcast</option>
+<option value="targeted">4 · Connection registry + targeted routing</option>
+<option value="offline">5 · Bob offline; reconnect & catch-up</option>
+<option value="duplicate">6 · Lost ACK and duplicate retry</option>
+<option value="revoked">7 · Unauthorized subscription / send</option>
+<option value="crash">8 · Gateway crash & volatile Pub/Sub</option>
+</select></div>
+<div class="field"><label for="sendmode">Alice sends through</label><select id="sendmode"><option value="ws">WebSocket frame</option><option value="rest">REST POST</option></select></div>
+<div class="field"><label for="gateways">Gateway instances <span id="gatewayValue" class="val">4</span></label><input id="gateways" type="range" min="2" max="12" step="1" value="4"></div>
+<div class="field"><label for="clients">Modeled live sockets <span id="clientValue" class="val">20,000</span></label><input id="clients" type="range" min="5000" max="100000" step="5000" value="20000"></div>
+</section>
+<div class="layout">
+<section class="card" aria-label="Architecture visualization">
+<div class="mapheader"><h2>System topology</h2><span class="tag" id="topotag">Single instance</span></div>
+<div class="topology" id="topology">
+<div class="layer"><div class="layername">Clients · one socket per online device</div><div class="nodrow">
+<div class="node" id="alice"><div class="name">📱 Alice</div><div class="detail">Sender · user alice</div><div class="state" id="astate">Offline</div></div>
+<div class="node" id="bob"><div class="name">📱 Bob</div><div class="detail">Recipient · user bob</div><div class="state" id="bstate">Offline</div></div>
+</div></div>
+<div class="route" aria-live="polite"><strong>Current network path</strong><div class="path" id="route">Choose Next to establish the first connection.</div></div>
+<div class="layer"><div class="layername">Realtime layer · owns TCP / WebSocket sessions</div>
+<div class="nodrow" id="gatewayrow">
+<div class="node" id="g1"><div class="name" id="g1name">🖧 Gateway G1</div><div class="detail" id="g1detail">Alice's socket</div><div class="state" id="g1state">Listening /ws</div></div>
+<div class="node" id="g2"><div class="name">🖧 Gateway G2</div><div class="detail" id="g2detail">Bob's socket</div><div class="state" id="g2state">Listening /ws</div></div>
+</div></div>
+<div class="layer"><div class="layername">Domain & infrastructure · no client sockets here after splitting</div>
+<div class="nodrow three">
+<div class="node" id="chat"><div class="name">⚙ Chat Service</div><div class="detail">Membership, ordering, idempotency</div><div class="state">Domain decisions</div></div>
+<div class="node" id="database"><div class="name">▣ Message DB</div><div class="detail">Durable message / history</div><div class="state" id="dbstate">0 messages</div></div>
+<div class="node" id="broker"><div class="name">◆ Redis Pub/Sub</div><div class="detail">Volatile inter-node signal</div><div class="state" id="busstate">Not used</div></div>
+<div class="node" id="registry"><div class="name">▤ Connection registry</div><div class="detail">bob → Gateway G2 (presence)</div><div class="state" id="regstate">Not used</div></div>
+</div></div></div>
+<div class="footergrid" aria-label="Simulation metrics">
+<div class="metric"><div class="num" id="mStored">0</div><div class="lbl">Durable DB writes</div></div>
+<div class="metric"><div class="num" id="mPublish">0</div><div class="lbl">Broker publishes</div></div>
+<div class="metric"><div class="num" id="mFanout">0</div><div class="lbl">Broker node deliveries</div></div>
+<div class="metric"><div class="num" id="mPush">0</div><div class="lbl">Client WS pushes</div></div>
+</div>
+<p class="mini" id="capacity">Capacity model: synthetic numbers, not benchmarks.</p>
+</section>
+<aside class="side">
+<section class="card" aria-live="polite"><div class="smallcaps" id="counter">Step 0 / 10</div><div class="step-title" id="stepTitle">Ready to trace a message</div><p class="why" id="explain">Press Next to follow the first operation and see which component acts and what state changes.</p><h3>Why this step matters</h3><p id="why">WebSocket owns a live transport connection; chat domain logic owns membership, persistence and message semantics.</p><div class="warn" id="caution"></div><div class="progress"><div id="bar"></div></div>
+<div class="buttons"><button id="back">← Back</button><button id="next" class="primary">Next step →</button><button id="play">▶ Play</button><button id="reset">↻ Reset</button></div>
+<div class="field" style="margin-top:13px"><label for="speed">Auto-play interval</label><select id="speed"><option value="2100">Slow · 2.1s</option><option value="1250" selected>Normal · 1.25s</option><option value="550">Fast · 0.55s</option></select></div></section>
+<section class="card"><h2>On-the-wire detail</h2><p class="mini">Illustrative HTTP requests and application-defined WebSocket frames. A WebSocket frame is <strong>not</strong> another HTTP request.</p><pre id="wire" class="mono">GET /ws HTTP/1.1
+Upgrade: websocket</pre></section>
+<section class="card"><h2>Event timeline</h2><div class="log" id="log" role="log" aria-live="off"></div></section>
+</aside>
+</div>
+<div class="info-grid">
+<section class="card"><h2>State you can inspect</h2><div class="statline"><span>Alice connection</span><b id="aliceInfo">Offline</b></div><div class="statline"><span>Bob connection</span><b id="bobInfo">Offline</b></div><div class="statline"><span>Bob subscription</span><b id="subInfo">Not subscribed</b></div><div class="statline"><span>Chat database</span><b id="dbInfo">No message</b></div><div class="statline"><span>Delivery to Bob</span><b id="delInfo">Not delivered</b></div><div class="statline"><span>Connection route</span><b id="routeInfo">Unknown</b></div></section>
+<section class="card"><h2>Scaling experiment</h2><p class="mini">Illustrative 10,000 active sockets per gateway budget. Move the sliders and observe the need for more instances. This budget is a teaching assumption, not a hardware benchmark.</p><div class="statline"><span>Configured gateways</span><b id="scaleG">4</b></div><div class="statline"><span>Active sockets / gateway (mean)</span><b id="scalePer">5,000</b></div><div class="statline"><span>Instances needed at 10k/socket budget</span><b id="scaleNeed">2</b></div><div class="statline"><span>Model capacity</span><b id="scaleState">Within budget</b></div><div class="statline"><span>One event using broadcast</span><b id="scaleBroad">4 inter-node deliveries</b></div><div class="statline"><span>One event using targeted routing</span><b id="scaleTarget">1 inter-node delivery</b></div><p class="mini">With <strong>Redis Pub/Sub</strong>, broadcasting one event to all G nodes costs O(G) broker-to-gateway deliveries; targeting the owner costs approximately O(1) if a fresh registry lookup exists. Actual implementation and cluster topology may differ.</p></section>
+</div>
+<section class="section card"><h2>Compare the design choices</h2><div class="compare"><table><thead><tr><th>Architecture</th><th>Who owns Bob's socket?</th><th>Cross-instance routing</th><th>Failure / trade-off</th></tr></thead><tbody>
+<tr><td>Single Spring Boot server</td><td>Chat Service itself</td><td>In-memory lookup</td><td>No broker; shared scaling/failure domain</td></tr>
+<tr><td>Two services, no routing</td><td>Gateway G2</td><td>Missing</td><td>G1 cannot write to G2's socket</td></tr>
+<tr><td>Redis broadcast</td><td>Gateway G2</td><td>All gateways receive a signal</td><td>Simple; O(G) broker fan-out; not durable</td></tr>
+<tr><td>Registry + targeted delivery</td><td>Gateway G2</td><td>Registry lookup → G2</td><td>Less fan-out; adds presence accuracy/recovery concerns</td></tr>
+</tbody></table></div><p class="mini">For chat, persist before pushing; Redis Pub/Sub alone does not make a message durable. Gateway count and number of user devices are independent dimensions.</p></section>
+<section class="section"><h2>Concepts explained</h2><div class="notes">
+<details><summary>What is a WebSocket Gateway?</summary><p><b>What:</b> A process holding WebSocket sessions. <b>Why:</b> It separates long-lived connections from the Chat Service's business logic. <b>How:</b> It maps authenticated device sessions to sockets and writes events to those sockets. It never automatically knows sockets on other processes.</p></details>
+<details><summary>What is a subscription?</summary><p><b>What:</b> An application-level instruction to deliver selected events. <b>Why:</b> A socket alone does not establish permission to see all chats. <b>How:</b> Authenticate the session; validate a user against chat membership on SUBSCRIBE and upon relevant permission changes. Subscriptions are not part of WebSocket's wire protocol.</p></details>
+<details><summary>Why not publish straight to Redis?</summary><p>Redis Pub/Sub is at-most-once delivery; a disconnected subscriber misses published messages. Persist the chat message in a database, then use Pub/Sub as a delivery signal. Reconnecting clients fetch missing messages by a cursor or sequence, with idempotency protection.</p></details>
+<details><summary>REST sending vs WebSocket sending</summary><p>With REST, Alice uses POST /chats/42/messages and receives a 201/202 depending on the contract; Bob still receives WebSocket events. With WebSocket, Alice sends a MESSAGE_SEND frame and gets an application ACK. Same authorization, durability and deduplication requirements apply. Toggle the send mode above.</p></details>
+<details><summary>Why do we need a registry?</summary><p>When Bob is connected to G2 and Alice's event is processed on G1, G1 needs to know G2 owns Bob's socket. A registry might store bob-device1 → G2 with a lease/TTL and epoch. A stale record requires retry and resync; it is not a guarantee of delivery.</p></details>
+<details><summary>What happens on server restart?</summary><p>TCP/WebSocket sessions disappear, so clients reconnect and reauthenticate. Session/subscription state is rebuilt, and missed chat messages are fetched from durable storage. A Redis Pub/Sub notification sent during the restart will not be replayed automatically.</p></details>
+<details><summary>Delivery acknowledgments</summary><p>Stored (server DB ACK), delivered (recipient device ACK), and read (user action) are different states. Seeing a successful call to WebSocket send does not prove that Bob's application processed the message. Device identifiers and message IDs support multi-device delivery and deduplication.</p></details>
+<details><summary>Is one WebSocket per chat needed?</summary><p>No. Usually one connection per online device carries messages for multiple chats and even multiple domains. Chat ownership checks apply to each logical operation. Connections can migrate between servers only through disconnect and reconnection, not by transferring a Java WebSocketSession object.</p></details>
+<details><summary>What about Kafka instead of Redis?</summary><p>Kafka provides retained records and consumer offsets, useful for downstream fan-out and replay. Redis Pub/Sub is transient. Kafka is not a substitute for a client connection registry, recipient authorization, or correct chat persistence and sequencing. A durable outbox avoids a database-write / publish dual-write gap.</p></details>
+</div></section>
+<section class="section card"><h2>Prediction practice</h2><div class="notes">
+<div class="question"><h3>If Bob is connected to G2, can G1 directly call Bob's WebSocketSession?</h3><button class="qbtn" data-answer="a1">Reveal explanation</button><p class="answer" id="a1">No. Session objects belong to the process holding the socket. G1 must route a delivery command to G2; only G2 writes to Bob's connection.</p></div>
+<div class="question"><h3>If the message was stored but Redis Pub/Sub was down, was the message lost?</h3><button class="qbtn" data-answer="a2">Reveal explanation</button><p class="answer" id="a2">The durable message was not lost. The immediate delivery signal may be lost. Bob needs replay/resync after reconnect or a reliable outbox-driven delivery pipeline.</p></div>
+<div class="question"><h3>If Alice retries after an ACK was lost, should the DB store a second message?</h3><button class="qbtn" data-answer="a3">Reveal explanation</button><p class="answer" id="a3">No. Deduplicate by an authenticated sender + clientMessageId key (or equivalent unique idempotency key) and return the previously created message ID.</p></div>
+</div></section>
+<section class="section card"><h2>Interview framework · WHAT → WHY → HOW → TRADE-OFF</h2>
+<p><b>WHAT:</b> Start with one Spring Boot service exposing REST and WebSocket endpoints. Later separate a WebSocket Gateway from Chat business logic.</p>
+<p><b>WHY:</b> Persistent WebSocket connections consume process resources; Chat Service work scales with message writes and membership checks. These workloads scale differently.</p>
+<p><b>HOW:</b> Authenticate sockets, authorize chat subscriptions, persist messages, acknowledge server acceptance, publish an internal delivery signal and route it to the gateway that owns Bob's connection. Resync after gaps and recheck authorization after membership changes.</p>
+<p><b>TRADE-OFF:</b> A single process avoids routing infrastructure. Broadcast Pub/Sub adds cross-node delivery but pays O(G) fan-out; targeted routing reduces fan-out but requires a registry and resilience to stale presence.</p>
+<p class="mini">Track concurrent connections, per-gateway heap/FD usage, WS send-queue depth, p95/p99 delivery latency, DB write latency, Pub/Sub delivery fan-out, reconnect storm rate, and replay gap duration. Reconsider the design based on measured saturation rather than a fixed user count.</p>
+</section>
+<footer>Simulation only; all states and metrics are deterministic models, not live network traffic or measured benchmarks. References: <a href="https://www.rfc-editor.org/rfc/rfc6455" target="_blank" rel="noopener">RFC 6455</a> · <a href="https://redis.io/docs/latest/develop/pubsub/" target="_blank" rel="noopener">Redis Pub/Sub</a> · <a href="https://docs.spring.io/spring-framework/reference/web/websocket/server.html" target="_blank" rel="noopener">Spring WebSocket</a> · <a href="https://microservices.io/patterns/data/transactional-outbox.html" target="_blank" rel="noopener">Transactional outbox</a>. DIY: <a href="https://github.com/spring-projects/spring-framework" target="_blank" rel="noopener">Spring Framework</a> and <a href="https://github.com/redis/redis" target="_blank" rel="noopener">Redis</a>.</footer>
+</main>
+<script>
+(function(){
+"use strict";
+const el = id => document.getElementById(id);
+const $ = id => el(id).value;
+let index=0, steps=[], timer=null;
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const number = n => n.toLocaleString("en-US");
+function step(kind,title,explain,why,wire,path,focus,caution){
+ return {kind,title,explain,why,wire:wire||"",path:path||"",focus:focus||[],caution:caution||""};
+}
+const handshake = 'GET /ws HTTP/1.1\nHost: chat.example.com\nConnection: Upgrade\nUpgrade: websocket\nSec-WebSocket-Version: 13\nSec-WebSocket-Key: <nonce>\nCookie: session=...\n\nHTTP/1.1 101 Switching Protocols\nUpgrade: websocket';
+const subscribe = '{"type":"SUBSCRIBE","chatId":"42","requestId":"r-1"}';
+function sendPayload(){
+ return $("sendmode")==="ws"?
+ 'WebSocket text frame from Alice → Gateway:\n{"type":"MESSAGE_SEND","chatId":"42","clientMessageId":"c-101","text":"Hello Bob"}':
+ 'POST /chats/42/messages HTTP/1.1\nAuthorization: Bearer <token>\nContent-Type: application/json\n\n{"clientMessageId":"c-101","text":"Hello Bob"}';
+}
+function ackPayload(){
+ return $("sendmode")==="ws"?
+ 'Gateway → Alice (WebSocket frame):\n{"type":"MESSAGE_ACK","clientMessageId":"c-101","messageId":"m-501","status":"STORED"}':
+ 'HTTP/1.1 201 Created\nContent-Type: application/json\n\n{"messageId":"m-501","clientMessageId":"c-101","status":"STORED"}';
+}
+const pushed = 'Gateway → Bob (WebSocket frame):\n{"type":"chat.message.received","data":{"messageId":"m-501","chatId":"42","senderId":"alice","text":"Hello Bob"}}';
+function build(){
+ const mode=$("scenario"), s=[];
+ const add=(...a)=>s.push(step(...a));
+ const isSingle=mode==="single" || mode==="offline" || mode==="duplicate" || mode==="revoked";
+ add("connectAlice","Alice opens a WebSocket","Alice makes an HTTP/1.1 upgrade request. The server checks her authenticated session before completing the handshake.","HTTP 101 starts a long-lived, bidirectional connection. This is not the same as creating a chat message.",handshake,"Alice → "+(isSingle?"Chat Server":"G1"),["alice","g1"]);
+ if(mode!=="offline"){
+ add("connectBob","Bob opens a separate WebSocket",isSingle?"Bob connects to the same chat server. The server now holds two sockets.":"Bob connects to G2. G1 has no access to the WebSocket object on G2.","TCP/WebSocket connections belong to the server process that accepted them. One user may also have multiple devices.",handshake,"Bob → "+(isSingle?"Chat Server":"G2"),["bob",isSingle?"g1":"g2"]);
+ add("subscribe","Bob subscribes to chat 42","Bob sends a SUBSCRIBE frame. The chat membership check passes and the server records the logical subscription.","Authentication proves who Bob is; authorization proves he may receive this conversation.",subscribe,"Bob → Gateway → Chat membership check",["bob","chat"]);
+ }
+ if(mode==="revoked"){
+ add("badSub","Alice attempts an unauthorized subscription","Alice tries to subscribe to a chat she does not belong to. Domain authorization denies it.","An authenticated WebSocket is not permission to receive every chat.",'{"type":"SUBSCRIBE","chatId":"private-999"}\n\n{"type":"ERROR","code":"FORBIDDEN"}',"Alice → Gateway → Chat Service → DENIED",["alice","chat"],"Never trust arbitrary chat IDs supplied over WebSocket.");
+ add("badSend","Alice attempts to send to a forbidden chat","The gateway forwards the attempted operation for authorization; the Chat Service rejects it before persistence.","Check authorization on each client-initiated command, not just at handshake.",'{"type":"MESSAGE_SEND","chatId":"private-999","text":"Hello"}\n\n{"type":"ERROR","code":"FORBIDDEN"}',"Alice → Chat Service → DENIED",["chat","alice"],"No database write, no recipient delivery.");
+ return s;
+ }
+ add("send","Alice sends a message",$("sendmode")==="ws"?"Alice writes a text frame over her existing socket.":"Alice sends a REST POST. Bob still receives events over WebSocket.","Transport is a choice: in either case, the backend must validate, persist and route the message.",sendPayload(),"Alice → "+($("sendmode")==="ws"?"G1 (WS)":"HTTP API")+" → Chat Service",["alice","g1","chat"]);
+ add("auth","Chat Service authorizes Alice","The domain service verifies Alice is a member of chat 42 and can write to it.","The connection layer authenticates a user; the domain service enforces business access controls.",'canWriteChat(user="alice", chatId="42") → true',"Chat Service → membership store",["chat"]);
+ add("persist","Persist message before delivery","The server inserts message m-501 in durable chat storage with a uniqueness constraint on Alice + clientMessageId.","WebSocket frames or Redis Pub/Sub are not durable message storage. A stored message can be replayed.",'INSERT message(id=m-501, sender=alice, chat=42, client_msg=c-101)\nCOMMIT → success',"Chat Service → Message DB",["chat","database"]);
+ add("ack","Acknowledge storage to Alice","The server tells Alice the message was stored. This does not mean Bob has received or read it.","Separate STORED, DELIVERED and READ states. A successful socket write is not recipient delivery.",ackPayload(),"Chat Service / G1 → Alice",["g1","alice"]);
+ if(mode==="single"){
+ add("local","Look up Bob's local socket","The same server has bob → session-B1 in its in-memory session map.","No broker is necessary when both client sockets and business logic live in one server.",'localSessions.get("bob") → session-B1',"Chat Server → in-memory sessions",["g1"]);
+ add("deliver","Push the event to Bob","The server writes a WebSocket text frame to Bob's existing connection.","Server-to-client push is the server's responsibility; Bob need not poll a REST endpoint.",pushed,"Chat Server → Bob (WS)",["g1","bob"]);
+ add("receipt","Bob acknowledges delivery","Bob's app ACKs message m-501. The server can mark it as delivered and notify Alice.","DELIVERED requires an application-level acknowledgment, not merely TCP send success.",'{"type":"DELIVERY_ACK","messageId":"m-501"}',"Bob → Chat Server → Alice",["bob","g1","alice"]);
+ } else if(mode==="split"){
+ add("missing","G1 cannot access G2's socket","Alice's server looks for Bob locally. Bob is on G2, so local lookup fails.","A WebSocket session object is process-local. Deploying multiple replicas creates a cross-instance routing problem.",'G1: localSessions.get("bob") → NOT_FOUND\nG2: localSessions.get("bob") → session-B1',"G1 ✕ G2 (no event bus)",["g1","g2"],"The message was stored but immediate delivery failed.");
+ add("sync","Bob recovers from persistent history","Bob requests missing messages using a cursor or sequence. The message is still in the database.","Catch-up is required even in designs with a broker, because connectivity can fail.",'GET /chats/42/messages?after=cursor-previous\nHTTP 200: [{ "messageId": "m-501" }]',"Bob → Chat Service → Message DB",["bob","database"]);
+ } else if(mode==="broadcast"){
+ add("broadcast","Publish to all gateways","The Chat Service publishes a delivery signal through Redis Pub/Sub. Every gateway subscribed to that channel receives a copy.","Broadcast is straightforward but every gateway inspects messages even if it does not hold Bob's socket.",'PUBLISH deliveries {"userId":"bob","messageId":"m-501"}\nGateway subscriber count = '+$("gateways"),"Chat → Redis → ALL "+$("gateways")+" gateways",["chat","broker","g1","g2"],"Redis Pub/Sub is ephemeral; missing signals are not replayed.");
+ add("route","Only G2 has Bob's connection","All gateways inspect the event. G2 finds Bob locally; the others discard it.","Broker fan-out costs grow with the gateway count, not necessarily with the number of connected recipients.",'G1: bob session NOT_FOUND → discard\nG2: bob session FOUND → push',"G2 local session lookup",["g2","broker"]);
+ add("deliver","G2 pushes to Bob","G2 sends the message to Bob through his own WebSocket.","The broker passes an internal signal; G2 performs the external socket write.",pushed,"Redis → G2 → Bob",["g2","bob"]);
+ add("receipt","Bob acknowledges receipt","The receiving device sends a delivery acknowledgment over its socket.","Server-side persistence and client receipt are different events.",'{"type":"DELIVERY_ACK","messageId":"m-501"}',"Bob → G2 → Chat Service",["bob","g2","chat"]);
+ } else if(mode==="targeted"){
+ add("register","Registry knows where Bob is","On Bob's connection, G2 registers bob/device1 → G2 with a TTL or lease. The entry should be refreshed and removed on disconnect.","This is a routing hint, not durable message storage. Devices can move or disconnect.",'SETEX presence:bob:device1 30 {"gateway":"G2","epoch":7}',"G2 → Presence Registry",["g2","registry"]);
+ add("lookup","Resolve recipient gateway","Delivery logic looks up Bob's active device location and resolves G2.","Targeted routing avoids publishing to every gateway, but stale entries must be handled.",'GET presence:bob:device1 → {"gateway":"G2","epoch":7}',"Chat / Router → Registry → G2",["chat","registry"]);
+ add("target","Send to the owning gateway only","An internal bus sends one delivery command addressed to G2 rather than broadcasting it to all gateways.","Broker fan-out is approximately constant per targeted device if registry lookup is available.",'PUBLISH gateway:G2 {"recipient":"bob","messageId":"m-501","epoch":7}',"Chat → Redis channel gateway:G2 → G2",["chat","broker","g2"]);
+ add("deliver","G2 pushes the event to Bob","G2 verifies local connection ownership and authorization status, then sends the event.","Never assume a registry record guarantees that a device is still connected.",pushed,"G2 → Bob (WebSocket)",["g2","bob"]);
+ add("receipt","Bob confirms receipt","Bob sends a delivery acknowledgment. The server can update delivery metadata.","Targeting does not remove the need for end-to-end acknowledgment and resync.",'{"type":"DELIVERY_ACK","messageId":"m-501"}',"Bob → G2 → Chat Service",["bob","g2","chat"]);
+ } else if(mode==="offline"){
+ add("offline","No active socket for Bob","Bob's phone is offline. The server has no session to push to, although the message remains persisted.","The app must not equate unavailable realtime delivery with message loss.",'localSessions.get("bob") → NOT_FOUND',"Chat Server → local sessions",["chat","g1"],"No live push is possible.");
+ add("reconnect","Bob comes online again","Bob establishes a new authenticated WebSocket connection and re-subscribes.","Connection presence is volatile; a new socket does not contain previous message history.",handshake+'\n'+subscribe,"Bob → Chat Server",["bob","g1"]);
+ add("sync","Bob fetches the missing message","Bob requests messages after his last confirmed cursor. The server reads m-501 from the DB.","Replay and per-chat cursors repair gaps after offline periods.",'GET /chats/42/messages?after=m-500\nHTTP 200: [{ "messageId": "m-501" }]',"Bob → Chat Service → Message DB",["bob","database"]);
+ add("receipt","Bob confirms processing","Bob acknowledges the message after loading it.","A delivery receipt is distinct from the message's durable storage.",'{"type":"DELIVERY_ACK","messageId":"m-501"}',"Bob → Chat Server",["bob","g1"]);
+ } else if(mode==="duplicate"){
+ add("lostAck","Alice loses the ACK","The server stored the message, but a network interruption prevents Alice from observing its acknowledgment.","Timeout means the outcome is uncertain, not necessarily failed.",'Server stored m-501\nNetwork drops Alice ACK',"Chat Server ✕ Alice (ACK lost)",["alice","g1"],"Client must retry with the SAME clientMessageId.");
+ add("retry","Alice retries the same command","After reconnecting, Alice re-sends c-101 with the same idempotency key.","A unique idempotency key prevents a second logical message.",sendPayload(),"Alice → Chat Service (retry)",["alice","chat"]);
+ add("dedup","Deduplication avoids double insert","Unique constraint on (authenticated sender, clientMessageId) finds the existing m-501; no new DB row is created.","Retrying safely requires application idempotency, regardless of REST or WebSocket.",'UNIQUE(sender_id, client_message_id)\nON CONFLICT → return existing m-501',"Chat Service → Message DB",["chat","database"]);
+ add("deliver","Bob receives one logical message","The application pushes the already-stored message. Bob should also deduplicate by server messageId.","End-to-end delivery may be at least once; UI should render each logical message once.",pushed,"Chat Server → Bob",["g1","bob"]);
+ } else if(mode==="crash"){
+ add("crash","G2 crashes before delivery","Bob's WebSocket disconnects. G2 can no longer receive the delivery signal or write to Bob.","Process failure invalidates all sessions owned by that process; clients must reconnect.",'Gateway G2 process EXIT\nWebSocket to Bob CLOSED',"G2 crash → Bob disconnected",["g2","bob"],"Bob is disconnected despite the persisted message.");
+ add("lostPublish","A Pub/Sub signal is missed","A Pub/Sub notification is published, but G2 is unavailable. Redis does not retain it for a future subscriber.","Redis Pub/Sub does not guarantee replay. Durable persistence must be the source of truth.",'PUBLISH deliveries {"userId":"bob","messageId":"m-501"}\nG2 disconnected → signal missed',"Chat → Redis → G2 unavailable",["chat","broker"],"The realtime signal was lost, not the stored message.");
+ add("recover","Bob reconnects to another gateway","Bob establishes a new socket, potentially on G1 or a restarted G2. Presence and subscriptions are rebuilt.","Connections are not transparently moved between processes; clients reconnect.",handshake,"Bob → healthy gateway",["bob","g1"]);
+ add("sync","Catch up from durable chat history","Bob fetches any message after his last durable cursor and recovers m-501.","History/replay is the recovery path after missed realtime notifications.",'GET /chats/42/messages?after=m-500\nHTTP 200: [{ "messageId": "m-501" }]',"Bob → Chat Service → Message DB",["bob","database"]);
+ }
+ return s;
+}
+function fresh(){return {alice:false,bob:false,sub:false,stored:false,acked:false,delivered:false,received:false,route:"Unknown",pub:0,fan:0,push:0,dbwrites:0,registry:0,local:false,fail:"",log:[]};}
+function apply(s,event){
+ const mode=$("scenario"), g=Number($("gateways"));
+ switch(event.kind){
+ case "connectAlice":s.alice=true;s.route=mode==="single"||mode==="offline"||mode==="duplicate"||mode==="revoked"?"Chat Server":"G1";break;
+ case "connectBob":s.bob=true;s.route=mode==="single"||mode==="duplicate"||mode==="revoked"?"Same Chat Server":"Bob on G2";break;
+ case "subscribe":s.sub=true;break;
+ case "send":break;
+ case "auth":break;
+ case "persist":s.stored=true;s.dbwrites=1;break;
+ case "ack":s.acked=true;break;
+ case "local":s.local=true;s.route="Bob local session";break;
+ case "missing":s.fail="No cross-instance path";s.route="G1 cannot reach G2";break;
+ case "broadcast":s.pub++;s.fan+=g;s.route="Broadcast to "+g+" gateways";break;
+ case "route":s.route="G2 owns Bob's socket";break;
+ case "register":s.registry=1;s.route="bob/device1 → G2";break;
+ case "lookup":s.registry++;s.route="bob/device1 → G2";break;
+ case "target":s.pub++;s.fan++;s.route="Redis → G2 only";break;
+ case "deliver":s.delivered=true;s.push++;break;
+ case "receipt":s.received=true;break;
+ case "offline":s.fail="Bob offline";break;
+ case "reconnect":s.bob=true;s.sub=true;s.route="Reconnected to Chat Server";break;
+ case "sync":s.bob=true;s.sub=true;s.delivered=true;s.route="Durable history replay";break;
+ case "lostAck":s.acked=false;s.alice=false;s.fail="ACK lost; result uncertain";break;
+ case "retry":s.alice=true;break;
+ case "dedup":s.acked=true;s.fail="Duplicate avoided";break;
+ case "badSub":s.fail="403-like application-level FORBIDDEN";break;
+ case "badSend":s.fail="Write rejected; no persistence";break;
+ case "crash":s.bob=false;s.sub=false;s.fail="G2 crashed";break;
+ case "lostPublish":s.pub++;s.fan++;s.fail="Pub/Sub notification missed";break;
+ case "recover":s.bob=true;s.sub=true;s.route="New gateway session";break;
+ }
+ s.log.push(event.title);
+}
+function compute(){const s=fresh();for(let i=0;i<index;i++)apply(s,steps[i]);return s;}
+function highlight(ids){
+ ["alice","bob","g1","g2","chat","database","broker","registry"].forEach(x=>el(x).classList.toggle("focus",ids.includes(x)));
+}
+function render(){
+ const s=compute(), mode=$("scenario"), active=index>0?steps[index-1]:null, tot=steps.length;
+ const single=["single","offline","duplicate","revoked"].includes(mode);
+ el("g1name").textContent=single?"🖧 Combined Chat Server":"🖧 Gateway G1";
+ el("g1detail").textContent=single?"REST + WebSocket + domain":"Alice's WS session";
+ el("g2detail").textContent="Bob's WS session";
+ el("g2").style.display=single?"none":"block";
+ el("gatewayrow").style.gridTemplateColumns=single?"1fr":"1fr 1fr";
+ el("broker").style.opacity=["broadcast","targeted","crash"].includes(mode)?"1":".33";
+ el("registry").style.opacity=mode==="targeted"?"1":".33";
+ el("topotag").textContent=({single:"Combined service",split:"Separated gateways",broadcast:"Redis broadcast",targeted:"Registry + routing",offline:"Offline replay",duplicate:"Idempotency",revoked:"Authorization",crash:"Crash & recovery"})[mode];
+ el("astate").textContent=s.alice?"WS connected":"Offline / disconnected";
+ el("bstate").textContent=s.bob?"WS connected":"Offline / disconnected";
+ el("g1state").textContent=s.alice?"Holds Alice's socket":"Awaiting connections";
+ el("g2state").textContent=s.bob?"Holds Bob's socket":"No Bob socket";
+ el("dbstate").textContent=s.stored?"m-501 persisted":"0 messages";
+ el("busstate").textContent=s.pub?"Signals published: "+s.pub:"No signal";
+ el("regstate").textContent=s.registry?"Bob routed to G2":"Not active";
+ el("aliceInfo").textContent=s.alice?"Connected":"Disconnected";
+ el("bobInfo").textContent=s.bob?"Connected":"Disconnected";
+ el("subInfo").textContent=s.sub?"Allowed on chat 42":"None";
+ el("dbInfo").textContent=s.stored?"m-501 (durable)":"No stored message";
+ el("delInfo").textContent=s.received?"ACK from Bob":s.delivered?"Event received / synced":"Not delivered";
+ el("routeInfo").textContent=s.route;
+ el("mStored").textContent=s.dbwrites;
+ el("mPublish").textContent=s.pub;
+ el("mFanout").textContent=s.fan;
+ el("mPush").textContent=s.push;
+ el("route").innerHTML=active?'<span>'+esc(active.path||"No route")+'</span>':'Choose Next to trace the first packet.';
+ el("counter").textContent="Step "+index+" / "+tot;
+ el("stepTitle").textContent=active?active.title:"Ready to trace a message";
+ el("explain").textContent=active?active.explain:"Choose Next. The browser keeps exact model state and lets Back restore any earlier step.";
+ el("why").textContent=active?active.why:"Start with one process, then compare scale-out approaches and failure scenarios.";
+ el("caution").textContent=active?(active.caution||""):"";
+ el("wire").textContent=active?(active.wire||"No external wire message in this step; this is internal server state."):"GET /ws HTTP/1.1\nUpgrade: websocket\n\nStep through the simulation to see requests, frames and broker signals.";
+ el("bar").style.width=(100*index/Math.max(tot,1))+"%";
+ el("back").disabled=index===0;
+ el("next").disabled=index===tot;
+ el("next").textContent=index===tot?"Scenario finished ✓":"Next step →";
+ el("log").innerHTML=s.log.length?s.log.map((l,i)=>'<div class="logitem"><b>'+String(i+1).padStart(2,"0")+'</b><span>'+esc(l)+'</span></div>').join(""):'<div class="mini" style="padding:8px">No events yet.</div>';
+ highlight(active?active.focus:[]);
+ el("alice").classList.toggle("off",!s.alice);el("bob").classList.toggle("off",!s.bob);
+ updateCapacity();
+}
+function updateCapacity(){
+ const g=Number($("gateways")), c=Number($("clients")), limit=10000;
+ el("gatewayValue").textContent=g;el("clientValue").textContent=number(c);
+ el("scaleG").textContent=g;
+ el("scalePer").textContent=number(Math.ceil(c/g));
+ el("scaleNeed").textContent=number(Math.ceil(c/limit));
+ el("scaleState").textContent=c>g*limit?"Over modeled budget":"Within modeled budget";
+ el("scaleState").style.color=c>g*limit?"var(--red)":"var(--green)";
+ el("scaleBroad").textContent=g+" broker-to-node deliveries";
+ el("scaleTarget").textContent="1 broker-to-node delivery";
+ el("capacity").textContent=number(c)+" modeled sockets / "+g+" gateways = approximately "+number(Math.ceil(c/g))+" sockets per gateway; assumed "+number(limit)+"-socket budget.";
+}
+function stop(){if(timer!==null){clearInterval(timer);timer=null;}el("play").textContent="▶ Play";}
+function reset(){stop();index=0;steps=build();render();}
+function next(){if(index<steps.length){index++;render();}if(index>=steps.length)stop();}
+el("next").addEventListener("click",next);
+el("back").addEventListener("click",()=>{if(index>0){index--;render();}});
+el("reset").addEventListener("click",reset);
+el("play").addEventListener("click",()=>{
+ if(timer!==null){stop();return;}
+ if(index>=steps.length){index=0;render();}
+ el("play").textContent="Ⅱ Pause";
+ timer=setInterval(next,Number($("speed")));
+});
+["scenario","sendmode"].forEach(id=>el(id).addEventListener("change",reset));
+["gateways","clients"].forEach(id=>el(id).addEventListener("input",()=>{stop();if(id==="gateways"&&index>0){steps=build();}render();}));
+el("speed").addEventListener("change",()=>{if(timer!==null){stop();el("play").click();}});
+document.addEventListener("keydown",e=>{if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLButtonElement)return;if(e.key==="ArrowRight")next();if(e.key==="ArrowLeft"&&index>0){index--;render();}});
+document.querySelectorAll("[data-answer]").forEach(b=>b.addEventListener("click",()=>b.parentElement.classList.toggle("open")));
+window.__simTest={reset,build,compute,apply,()=>{}};
+reset();
+})();
+</script>
+</body></html>
