@@ -13,11 +13,16 @@ A collection of simulations for learning software engineering and distributed sy
 | Manifest Quest | HLS manifests, bitrate selection, buffering, CDN cache hits and S3 request flow | [Open](https://tharunworks.github.io/simulations/manifest-quest/) |
 | Online Chess: Consistency vs Availability | Multi-device conflicting moves, CAP, stale replica reads, partitions, failover and fencing | [Open](https://tharunworks.github.io/simulations/chess-cap/) |
 
+| Chat Delivery & WebSocket Scaling Lab | One server vs gateway fleet, Redis Pub/Sub broadcast, targeted routing, offline recovery, idempotency and authorization | [Open](https://tharunworks.github.io/simulations/chat-delivery-scaling/) |
+
 ## Chess CAP note
 
 A player using two devices can submit competing moves. For example, Alice's laptop submits `e2e4` to Server A while her phone submits `d2d4` to Server B. During a network partition, independently writable servers can each believe it is White's turn and acknowledge conflicting moves. The simulation demonstrates this issue, a single-authoritative-writer design, stale asynchronous PostgreSQL reads, and unsafe failover.
 
 ## Structure
+
+- `chat-delivery-scaling/index.html`: interactive chat/WebSocket architecture and scaling simulator.
+
 
 - `chess-cap/index.html`: stepwise chess CAP simulation and learning notes.
 - `manifest-quest/index.html`: streaming and manifest simulation.
