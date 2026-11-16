@@ -292,7 +292,7 @@ el("play").addEventListener("click",()=>{
 el("speed").addEventListener("change",()=>{if(timer!==null){stop();el("play").click();}});
 document.addEventListener("keydown",e=>{if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLButtonElement)return;if(e.key==="ArrowRight")next();if(e.key==="ArrowLeft"&&index>0){index--;render();}});
 document.querySelectorAll("[data-answer]").forEach(b=>b.addEventListener("click",()=>b.parentElement.classList.toggle("open")));
-window.__simTest={reset,build,compute,apply,()=>{}};
+window.__simTest={reset,build,compute,apply};
 reset();
 })();
 </script>
