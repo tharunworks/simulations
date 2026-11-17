@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Redis Pub/Sub + WebSockets — Architecture and Kafka Notes</title>
+  <style>
+    :root{--bg:#09111e;--panel:#101b2c;--panel-2:#142237;--border:#25344a;--ink:#f0f6fd;--muted:#a2b3c6;--teal:#75efc9;--purple:#b3a1ff;--blue:#85bdff;--dim:#55677e;--amber:#ffc27c}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:radial-gradient(ellipse at 9% -8%,rgba(60,132,157,.19),transparent 42%),radial-gradient(ellipse at 100% 18%,rgba(98,71,150,.16),transparent 42%),var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.45}
+    body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:linear-gradient(rgba(150,180,210,.028) 1px,transparent 1px),linear-gradient(90deg,rgba(150,180,210,.028) 1px,transparent 1px);background-size:34px 34px}
+    .wrap{max-width:1370px;margin:0 auto;padding:29px 29px 24px}
+    .topline{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--teal);text-transform:uppercase;letter-spacing:.13em;font-weight:750;font-size:11px}
+    .tag{display:inline-flex;gap:7px;align-items:center;border:1px solid #315961;border-radius:99px;padding:6px 11px;color:#b6fbe7;background:#153034;font-size:11px;letter-spacing:.02em;text-transform:none;font-weight:650}
+    .dot{height:7px;width:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px rgba(117,239,201,.8)}
+    h1{font-size:clamp(28px,3.2vw,45px);letter-spacing:-.047em;line-height:1.12;margin:13px 0 10px;font-weight:800}
+    h1 .accent{color:var(--teal)}
+    .subhead{max-width:1000px;color:var(--muted);font-size:15px;line-height:1.6;margin:0 0 23px}
+    .subhead strong{color:var(--ink)}
+    .primary-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,.83fr);gap:16px;align-items:stretch}
+    .card{background:linear-gradient(157deg,rgba(22,36,56,.98),rgba(13,25,41,.98));border:1px solid var(--border);border-radius:17px;min-width:0;box-shadow:0 12px 36px rgba(0,0,0,.12)}
+    .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:19px 21px 8px}
+    .eyebrow{font-size:10px;letter-spacing:.135em;color:var(--teal);font-weight:800;text-transform:uppercase;margin:0 0 4px}
+    h2{margin:0;font-size:18px;letter-spacing:-.025em;line-height:1.25}
+    .helper{color:var(--muted);font-size:11px;font-weight:550;padding-top:5px;white-space:nowrap}
+    .diagram-wrap{padding:3px 10px 0}
+    svg{display:block;width:100%;height:auto;overflow:visible}
+    svg text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    .svg-name{font-size:16px;font-weight:800;fill:var(--ink)}
+    .svg-small{font-size:11px;fill:var(--muted)}
+    .svg-value{font-size:12px;font-weight:700;fill:var(--ink)}
+    .client-box{fill:#17283d;stroke:#36506a;stroke-width:1.5;transition:stroke .2s,fill .2s}
+    .gateway-box{fill:#16283c;stroke:#496786;stroke-width:1.5;transition:stroke .2s,filter .2s}
+    .redis-box{fill:#173433;stroke:#3b947f;stroke-width:1.7;transition:filter .2s}
+    .ws-line{stroke:#54728f;stroke-width:2.4;fill:none;opacity:.55;transition:opacity .2s,stroke .2s}
+    .resp-line{stroke:#8374a5;stroke-width:3;fill:none;opacity:.5;transition:opacity .2s,stroke .2s}
+    .publish-path{stroke:var(--purple)}.route-path{stroke:var(--teal)}
+    .pill-bg{fill:#1e3450}.pill-text{font-size:10px;font-weight:700;fill:#bfd7fa}
+    .muted-badge{fill:#2a3444}.muted-badge-text{fill:#aab9c8}
+    .tiny-label{font-size:10px;font-weight:800;letter-spacing:.075em;fill:var(--muted)}
+    .architecture[data-step="1"] .publish-path,.architecture[data-step="2"] .route-path,.architecture[data-step="3"] .target-ws,.architecture[data-step="4"] .target-ws{opacity:1;stroke-width:4;stroke-dasharray:8 5;animation:dash 1.5s linear infinite}
+    .architecture[data-step="1"] .gateway-a .gateway-box,.architecture[data-step="2"] .redis-box,.architecture[data-step="3"] .gateway-box,.architecture[data-step="4"] .gateway-box{filter:drop-shadow(0px 0px 10px rgba(117,239,201,.32))}
+    .architecture[data-step="3"] .target .client-box,.architecture[data-step="4"] .target .client-box{stroke:var(--teal);fill:#153a3b}
+    .architecture[data-step="3"] .nontarget .client-box,.architecture[data-step="4"] .nontarget .client-box{opacity:.48}
+    .architecture[data-step="2"] .route-path{stroke:var(--teal)}
+    .architecture[data-step="4"] .route-path{opacity:1;stroke:var(--teal)}
+    @keyframes dash{to{stroke-dashoffset:-26}}
+    .mobile-hint{display:none}
+    .legend{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px 24px;padding:0 14px 15px;font-size:11px;color:var(--muted)}
+    .legend-item{display:flex;align-items:center;gap:8px}
+    .swatch{height:3px;width:24px;background:#85bdff;border-radius:2px}.swatch.resp{background:var(--purple)}.swatch.hit{background:var(--teal)}
+    .walkthrough{padding:19px 21px;display:flex;flex-direction:column;min-height:100%}
+    .step-timeline{display:flex;gap:7px;margin:18px 0 16px}
+    .step-dot{width:100%;height:5px;border-radius:99px;background:#29384d;transition:background .2s}
+    .step-dot.done{background:var(--teal)}
+    .step-count{font-size:12px;color:var(--muted);font-weight:650;letter-spacing:.04em;margin:0 0 7px}
+    .step-title{font-weight:800;font-size:24px;line-height:1.15;letter-spacing:-.035em;min-height:56px;margin:0 0 12px}
+    .step-detail{color:#c3d0df;font-size:14px;min-height:110px;line-height:1.65;margin:0 0 12px}
+    .inline-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#cbfbec;background:#183734;padding:2px 5px;border-radius:4px;font-size:.89em;overflow-wrap:anywhere}
+    .live-event{border:1px solid #345466;background:#11293a;border-radius:11px;padding:11px 12px;margin-top:auto}
+    .event-label{color:#89adbe;font-size:10px;text-transform:uppercase;font-weight:800;letter-spacing:.1em;margin-bottom:6px}
+    .event-code{font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:#d4f0ff;overflow-wrap:anywhere}
+    .event-code b{color:var(--teal);font-weight:600}
+    .controls{display:flex;gap:8px;margin-top:15px;flex-wrap:wrap}
+    button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid #37536a;background:#1a2d44;color:var(--ink);font-size:12px;font-weight:750;padding:10px 13px;min-height:38px;transition:background .12s,transform .12s}
+    button:hover:not(:disabled){background:#263e56}button:active:not(:disabled){transform:translateY(1px)}button:disabled{cursor:not-allowed;opacity:.38}button:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+    .btn-next{background:var(--teal);color:#0b2530;border-color:var(--teal);flex:1}.btn-next:hover:not(:disabled){background:#a1ffe0}
+    .scale{margin-top:16px;padding:13px 18px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}
+    .metric{padding:2px 16px;border-right:1px solid #2b3a50}.metric:last-child{border-right:0}
+    .metric-num{font-size:clamp(19px,2.5vw,30px);letter-spacing:-.035em;font-weight:830;color:var(--ink);line-height:1.15}
+    .metric-num.highlight{color:var(--teal)}
+    .metric-label{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.35}
+    .metric-context{font-size:10px;color:#7994ad;margin-top:3px}
+    .bottom-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px}
+    .detail{padding:17px 19px 18px;min-height:162px}
+    .detail h3{font-size:15px;margin:0 0 9px;font-weight:800;letter-spacing:-.02em}
+    .detail p{font-size:12.5px;color:#bfccdc;line-height:1.6;margin:0}
+    .detail strong{color:var(--ink)}
+    .code-example{margin:10px 0 0;border-radius:7px;background:#091929;border:1px solid #2a3c51;padding:8px 10px;color:#baf5e1;font:11px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+    .flow-sentence{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:11px;color:#9fc4c4;font-weight:700}
+    .flow-sentence span{padding:4px 7px;background:#18343c;border:1px solid #295260;border-radius:6px}
+    footer{display:flex;justify-content:space-between;gap:15px;margin-top:15px;color:#7f94aa;font-size:10px;line-height:1.5}
+    footer a{color:#afdacb;text-decoration:none}footer a:hover{text-decoration:underline}
+    @media(max-width:980px){.wrap{padding:23px 19px}.primary-grid{grid-template-columns:1fr}.walkthrough{min-height:initial}.step-title{min-height:0}.step-detail{min-height:0}.bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bottom-grid .detail:last-child{grid-column:1/-1}}
+    @media(max-width:620px){.wrap{padding:19px 12px}.topline{align-items:flex-start;flex-direction:column}.tag{margin-top:6px}h1{font-size:31px}.subhead{font-size:13px}.panel-head{padding:15px 15px 7px}.helper{display:none}.diagram-wrap{padding:0 3px;overflow-x:auto;overscroll-behavior-inline:contain}.diagram-wrap svg{width:670px;max-width:none}.mobile-hint{display:block;text-align:center;color:var(--muted);font-size:11px;margin:0 0 7px}.legend{padding-bottom:12px}.svg-name{font-size:17px}.scale{grid-template-columns:repeat(2,1fr);padding:10px}.metric{padding:12px;border-right:0}.metric:nth-child(odd){border-right:1px solid #2b3a50}.metric:nth-child(-n+2){border-bottom:1px solid #2b3a50}.bottom-grid{grid-template-columns:1fr}.bottom-grid .detail:last-child{grid-column:auto}footer{flex-direction:column}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+    @media print{*{animation:none!important}html,body{background:#fff!important;color:#172334!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{padding:9px}.card{box-shadow:none;background:#fff;color:#142434}.subhead,.metric-label,.detail p{color:#405166}.step-title,h1,.svg-name{color:#122132}h1{font-size:27px}.subhead{font-size:11px;margin-bottom:9px}.primary-grid{grid-template-columns:1.7fr .83fr;gap:8px}.bottom-grid{grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.bottom-grid .detail:last-child{grid-column:auto}.detail{min-height:0;padding:10px}.detail p{font-size:10px}.scale{margin-top:8px;padding:7px}.step-title{font-size:17px;min-height:0}.step-detail{font-size:11px;min-height:0}.walkthrough{padding:12px}.controls{display:none}.panel-head{padding:10px}.svg-name,.svg-value{fill:#fff!important}footer{margin-top:5px} @page{size:A4 landscape;margin:7mm}}
+
+    /* Expandable concepts / comparison notes */
+    .notes-section{margin-top:17px}
+    .notes-titlebar{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:11px;margin-bottom:13px}
+    .notes-titlebar h2{font-size:22px;margin:0 0 5px}
+    .notes-titlebar p{color:var(--muted);font-size:13px;max-width:920px;margin:0;line-height:1.55}
+    .quickjump{color:var(--teal);text-decoration:none;font-size:12px;font-weight:750;border:1px solid #2b6359;border-radius:8px;padding:8px 11px;display:inline-flex;align-items:center;gap:7px}
+    .quickjump:hover{background:#142e2b}
+    .taxonomy{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:13px}
+    .term{background:linear-gradient(150deg,#15243a,#111f31);border:1px solid #304158;border-radius:12px;padding:14px 15px;min-width:0}
+    .term .type{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--teal);margin:0 0 6px}
+    .term:nth-child(3) .type{color:var(--purple)}
+    .term h3{font-size:17px;letter-spacing:-.025em;margin:0 0 6px}
+    .term p{font-size:12px;color:#c1cddd;line-height:1.58;margin:0}
+    .term .example{display:inline-block;color:#d6e7f5;font-size:11px;margin-top:8px;font-weight:700}
+    .key-distinction{background:#102e32;border:1px solid #326969;padding:13px 16px;border-radius:11px;color:#c9e7e4;font-size:13px;line-height:1.56;margin-bottom:13px}
+    .key-distinction strong{color:#b7ffe6}
+    .notes-card{padding:17px 19px 18px}
+    .notes-card-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:13px}
+    .notes-card h3{font-size:16px;margin:0}
+    .note-muted{font-size:11px;color:var(--muted)}
+    .comparison-scroll{overflow-x:auto;max-width:100%}
+    .comparison{width:100%;border-collapse:separate;border-spacing:0;text-align:left;min-width:650px;font-size:12px}
+    .comparison th{background:#193047;font-size:12px;padding:11px 12px;color:#e6f4ff;border-bottom:1px solid #3c536a}
+    .comparison th:first-child{width:24%;border-top-left-radius:8px}
+    .comparison th:last-child{border-top-right-radius:8px}
+    .comparison td{padding:9px 12px;border-bottom:1px solid #26384c;color:#c4d2e2;vertical-align:top;line-height:1.49}
+    .comparison tr:last-child td{border-bottom:0}
+    .comparison td:first-child{color:#eff5fe;font-weight:700}
+    .comparison .yes{color:var(--teal);font-weight:750}
+    .comparison .no{color:#f9c193;font-weight:750}
+    .notes-duo{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:13px}
+    .scenario-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}
+    .scenario-box{padding:12px;border:1px solid #33475e;background:#101f31;border-radius:9px}
+    .scenario-box h4{margin:0 0 8px;font-size:13px}
+    .scenario-box p{margin:5px 0 0;color:#bdcad9;font-size:12px;line-height:1.56}
+    .scenario-box .stat{font-size:11px;color:#aabecf;padding:8px 9px;background:#0b1a29;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.7}
+    .scenario-box .stat b{color:var(--teal)}
+    .scenario-box.redis h4{color:var(--teal)}
+    .scenario-box.kafka h4{color:var(--purple)}
+    .when-row{display:flex;align-items:flex-start;gap:9px;margin-top:9px;color:#c3d1df;font-size:12px;line-height:1.56}
+    .when-row .pill{flex:none;background:#143a39;color:#a9f4db;border:1px solid #295c55;border-radius:6px;font-size:10px;font-weight:800;padding:3px 7px}
+    .when-row .pill.violet{background:#302746;color:#d0bfff;border-color:#584778}
+    .note-details{border:1px solid #32445b;border-radius:10px;margin-top:13px;background:#101f30;overflow:hidden}
+    .note-details summary{padding:12px 15px;cursor:pointer;font-weight:750;font-size:13px;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .note-details summary::-webkit-details-marker{display:none}
+    .note-details summary:after{content:'+';font-weight:500;font-size:20px;color:var(--teal)}
+    .note-details[open] summary:after{content:'−'}
+    .note-details summary:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+    .detail-body{border-top:1px solid #314057;padding:14px 16px;color:#bccbdb;font-size:12px;line-height:1.65}
+    .detail-body p{margin:0 0 10px}.detail-body p:last-child{margin-bottom:0}
+    .mini-steps{margin:6px 0 10px;padding-left:19px}
+    .mini-steps li{margin:5px 0}
+    .sources{margin-top:13px;color:#93a9bc;font-size:11px;line-height:1.7}
+    .sources a{color:#9fe6d5}
+    .sources a:hover{text-decoration:none}
+    @media(max-width:980px){.taxonomy{grid-template-columns:1fr 1fr}.taxonomy .term:last-child{grid-column:1/-1}.notes-duo{grid-template-columns:1fr}}
+    @media(max-width:620px){.notes-titlebar h2{font-size:19px}.taxonomy{grid-template-columns:1fr}.taxonomy .term:last-child{grid-column:auto}.notes-card{padding:13px 12px}.scenario-row{grid-template-columns:1fr}.comparison{min-width:620px}}
+    @media print{.notes-titlebar h2{font-size:16px}.taxonomy{grid-template-columns:repeat(3,1fr)}.taxonomy .term:last-child{grid-column:auto}.term{padding:7px}.term h3{font-size:13px}.term p{font-size:10px}.notes-card{padding:9px}.notes-section{break-before:page}.comparison{min-width:0;font-size:10px}.comparison td,.comparison th{padding:5px}.notes-duo{grid-template-columns:1fr 1fr}.scenario-box p{font-size:10px}.note-details:not([open]){display:none}.notes-titlebar p{font-size:11px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <nav aria-label="Simulation collection" style="margin:0 0 15px;font-size:13px"><a href="../" style="color:#75efc9;text-decoration:underline;text-underline-offset:3px">← All simulations</a></nav>
+      <div class="topline"><span>Distributed systems / Architecture in one page</span><span class="tag"><span class="dot"></span> Redis Pub/Sub × WebSockets</span></div>
+      <h1>One message. <span class="accent">Two levels of fan-out.</span></h1>
+      <p class="subhead"><strong>WebSocket gateways manage users; Redis distributes events between gateways.</strong> Instead of opening one Redis connection for every browser, each backend can multiplex many channel subscriptions over a shared Redis connection—and forward only relevant events to its local users.</p>
+    </header>
+
+    <section class="primary-grid" aria-label="Architecture and guided example">
+      <article class="card architecture" id="architecture" data-step="0">
+        <div class="panel-head"><div><p class="eyebrow">The architecture</p><h2>Who talks to whom?</h2></div><span class="helper">One game event, four example users</span></div>
+        <div class="diagram-wrap" tabindex="0" aria-label="Scrollable architecture diagram. Use horizontal scrolling on small screens.">
+          <svg viewBox="0 0 930 335" role="img" aria-labelledby="diagramTitle diagramDesc">
+            <title id="diagramTitle">WebSocket gateways and Redis Pub/Sub</title>
+            <desc id="diagramDesc">Users 101 and 102 connect to Gateway A, while users 201 and 202 connect to Gateway B. Users 101, 102 and 201 watch game 500; user 202 watches game 700. Gateway A publishes a move to Redis and both gateways receive it. Each gateway sends the event to its local game 500 viewers.</desc>
+            <defs>
+              <marker id="arrTeal" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7Z" fill="#75efc9"/></marker>
+              <marker id="arrPurple" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7Z" fill="#b3a1ff"/></marker>
+            </defs>
+            <text x="30" y="19" class="tiny-label">BROWSERS · WEBSOCKET CLIENTS</text>
+            <g class="target">
+              <rect class="client-box" x="30" y="35" width="136" height="65" rx="10"/>
+              <text class="svg-value" x="98" y="58" text-anchor="middle">User 101</text>
+              <rect class="pill-bg" x="68" y="68" width="60" height="21" rx="10"/><text class="pill-text" x="98" y="82" text-anchor="middle">game:500</text>
+            </g>
+            <g class="target">
+              <rect class="client-box" x="181" y="35" width="136" height="65" rx="10"/>
+              <text class="svg-value" x="249" y="58" text-anchor="middle">User 102</text>
+              <rect class="pill-bg" x="219" y="68" width="60" height="21" rx="10"/><text class="pill-text" x="249" y="82" text-anchor="middle">game:500</text>
+            </g>
+            <g class="target">
+              <rect class="client-box" x="618" y="35" width="136" height="65" rx="10"/>
+              <text class="svg-value" x="686" y="58" text-anchor="middle">User 201</text>
+              <rect class="pill-bg" x="656" y="68" width="60" height="21" rx="10"/><text class="pill-text" x="686" y="82" text-anchor="middle">game:500</text>
+            </g>
+            <g class="nontarget">
+              <rect class="client-box" x="768" y="35" width="136" height="65" rx="10"/>
+              <text class="svg-value" x="836" y="58" text-anchor="middle">User 202</text>
+              <rect class="muted-badge" x="806" y="68" width="60" height="21" rx="10"/><text class="muted-badge-text pill-text" x="836" y="82" text-anchor="middle">game:700</text>
+            </g>
+
+            <!-- Users' WebSocket links: highlighted selectively during local fan-out -->
+            <path class="ws-line target-ws" d="M98 101 L140 174" marker-start="url(#arrTeal)"/>
+            <path class="ws-line target-ws" d="M249 101 L212 174" marker-start="url(#arrTeal)"/>
+            <path class="ws-line target-ws" d="M686 101 L710 174" marker-start="url(#arrTeal)"/>
+            <path class="ws-line" d="M836 101 L795 174"/>
+            <text x="173" y="126" class="svg-small" text-anchor="middle">WebSocket</text>
+            <text x="768" y="126" class="svg-small" text-anchor="middle">WebSocket</text>
+
+            <g class="gateway-a">
+              <rect class="gateway-box" x="74" y="174" width="213" height="103" rx="13" />
+              <text x="180" y="204" class="svg-name" text-anchor="middle">Gateway A</text>
+              <text x="180" y="224" class="svg-small" text-anchor="middle">Redis subscriber + WS server</text>
+              <text x="180" y="251" class="svg-small" text-anchor="middle">Local watchers: 101, 102</text>
+            </g>
+            <g>
+              <rect class="gateway-box" x="645" y="174" width="213" height="103" rx="13" />
+              <text x="751" y="204" class="svg-name" text-anchor="middle">Gateway B</text>
+              <text x="751" y="224" class="svg-small" text-anchor="middle">Redis subscriber + WS server</text>
+              <text x="751" y="251" class="svg-small" text-anchor="middle">Local watchers: 201</text>
+            </g>
+            <g>
+              <rect class="redis-box" x="355" y="174" width="220" height="103" rx="13" />
+              <text x="465" y="204" class="svg-name" text-anchor="middle">Redis</text>
+              <text x="465" y="224" class="svg-small" text-anchor="middle">Pub/Sub broker · RESP/TCP</text>
+              <text x="465" y="251" class="svg-small" text-anchor="middle">game:500 → {A, B}</text>
+            </g>
+
+            <!-- Publish, then route the event back to both subscribed gateways -->
+            <path class="resp-line publish-path" d="M288 198 H353" marker-end="url(#arrPurple)"/>
+            <text x="321" y="186" class="svg-small" text-anchor="middle">PUBLISH</text>
+            <path class="resp-line route-path" d="M354 249 H289" marker-end="url(#arrTeal)"/>
+            <path class="resp-line route-path" d="M576 226 H644" marker-end="url(#arrTeal)"/>
+            <text x="610" y="209" class="svg-small" text-anchor="middle">Push</text>
+
+            <rect x="285" y="295" width="360" height="30" rx="15" fill="#142c3b" stroke="#275264"/>
+            <text x="465" y="315" text-anchor="middle" class="svg-small">The browser never needs to connect to Redis</text>
+          </svg>
+        </div>
+        <p class="mobile-hint">← Scroll the diagram horizontally →</p>
+        <div class="legend" aria-label="Connection legend"><span class="legend-item"><i class="swatch"></i> WebSocket: browser ↔ gateway</span><span class="legend-item"><i class="swatch resp"></i> Redis RESP/TCP: gateway ↔ Redis</span><span class="legend-item"><i class="swatch hit"></i> Event delivered</span></div>
+      </article>
+
+      <aside class="card walkthrough" aria-label="Interactive walkthrough">
+        <p class="eyebrow">Walk through the message</p><h2>A move in game 500</h2>
+        <div class="step-timeline" id="timeline" aria-hidden="true"><span class="step-dot"></span><span class="step-dot"></span><span class="step-dot"></span><span class="step-dot"></span><span class="step-dot"></span></div>
+        <p class="step-count" id="stepCount">STEP 0 OF 4</p>
+        <p class="step-title" id="stepTitle">Start with the connections</p>
+        <p class="step-detail" id="stepDetail">Four browsers have WebSocket connections to two backend gateways. Both gateways subscribe to <span class="inline-code">game:500</span>, but each gateway knows only its own connected users.</p>
+        <div class="live-event" aria-live="polite" aria-atomic="true">
+          <div class="event-label">Example event</div>
+          <div class="event-code">channel: <b>game:500</b><br/>payload: { "move": "e2e4" }</div>
+        </div>
+        <div class="controls"><button type="button" id="backBtn" aria-label="Previous simulation step">← Back</button><button type="button" id="resetBtn">Reset</button><button type="button" id="nextBtn" class="btn-next">Next step →</button></div>
+      </aside>
+    </section>
+
+    <section class="card scale" aria-label="Illustrative capacity comparison">
+      <div class="metric"><div class="metric-num">100,000</div><div class="metric-label">Browser WebSocket connections</div><div class="metric-context">Illustrative total audience</div></div>
+      <div class="metric"><div class="metric-num">20</div><div class="metric-label">WebSocket gateway instances</div><div class="metric-context">5,000 browser sockets each</div></div>
+      <div class="metric"><div class="metric-num highlight">~20</div><div class="metric-label">Redis subscription connections</div><div class="metric-context">If each gateway uses one shared subscriber connection</div></div>
+      <div class="metric"><div class="metric-num">2 stages</div><div class="metric-label">Redis → gateways → local users</div><div class="metric-context">Hierarchical fan-out</div></div>
+    </section>
+
+    <section class="bottom-grid" aria-label="Key takeaways">
+      <article class="card detail"><p class="eyebrow">01 / Multiplex</p><h3>One Redis connection, many channels</h3><p>Gateway A can subscribe to all game channels needed by its connected users over one Pub/Sub connection—not one connection per user.</p><pre class="code-example">SUBSCRIBE game:500 game:600 game:700</pre></article>
+      <article class="card detail"><p class="eyebrow">02 / Fan out locally</p><h3>Redis knows gateways, not browser users</h3><p>Redis delivers one event to each subscribed gateway. Each gateway uses its own <strong>channel → WebSocket sessions</strong> mapping to notify the relevant local users.</p><div class="flow-sentence"><span>1 publication</span>→<span>2 gateways</span>→<span>3 users</span></div></article>
+      <article class="card detail"><p class="eyebrow">03 / Trade-off</p><h3>Fewer Redis connections ≠ fewer deliveries</h3><p>Sending to 100,000 users still requires 100,000 final messages. Redis Pub/Sub also has <strong>no replay</strong>; reconnecting clients must recover missed state from an authoritative store.</p></article>
+    </section>
+
+
+    <section class="notes-section" id="messaging-notes" aria-labelledby="notes-heading">
+      <div class="notes-titlebar">
+        <div><p class="eyebrow">04 / Architecture notes · Patterns vs platforms</p>
+          <h2 id="notes-heading">Redis Pub/Sub vs Kafka: what should we call each?</h2>
+          <p>Separate the <strong>communication pattern</strong> from the <strong>system implementing it</strong>. Both Redis Pub/Sub and Kafka let publishers communicate with subscribers; Kafka also stores a partitioned event history for later consumption.</p>
+        </div>
+        <a class="quickjump" href="#architecture" aria-label="Return to WebSocket architecture diagram">↑ Architecture diagram</a>
+      </div>
+
+      <div class="taxonomy" aria-label="Messaging terminology">
+        <article class="term">
+          <p class="type">Pattern / How components communicate</p>
+          <h3>Publish–Subscribe (Pub/Sub)</h3>
+          <p>Producers publish to a named channel or topic. Consumers express interest without the producer addressing each consumer directly. It says <strong>who gets events</strong>, not whether events are saved.</p>
+          <span class="example">Examples: Redis Pub/Sub; Kafka topics + consumer groups</span>
+        </article>
+        <article class="term">
+          <p class="type">Component / Live notification delivery</p>
+          <h3>Pub/Sub message broker</h3>
+          <p>Routes notifications to currently subscribed clients. In Redis Pub/Sub, events are not retained for an offline subscriber to catch up. Think <strong>live radio broadcast</strong>.</p>
+          <span class="example">Implementation: Redis Pub/Sub</span>
+        </article>
+        <article class="term">
+          <p class="type">Platform / Retained event processing</p>
+          <h3>Distributed event streaming platform</h3>
+          <p>Stores event streams in partitioned logs, lets consumers track their own progress, and supports catch-up or replay within retention. Think <strong>recorded broadcast with a playback position</strong>.</p>
+          <span class="example">Implementation: Apache Kafka</span>
+        </article>
+      </div>
+
+      <p class="key-distinction"><strong>These are not opposing categories:</strong> Pub/Sub is a <em>messaging pattern</em>; an event streaming platform is a <em>class of infrastructure</em>. Kafka implements Pub/Sub through topics and consumer groups, while also providing retention, offsets, and replay. A <strong>distributed append-only log</strong> is the underlying Kafka storage model, not a replacement term for Pub/Sub.</p>
+
+      <article class="card notes-card" aria-labelledby="comparison-heading">
+        <div class="notes-card-head"><h3 id="comparison-heading">What changes between Redis Pub/Sub and Kafka?</h3><span class="note-muted">Compare semantics, not brand names</span></div>
+        <div class="comparison-scroll" role="region" aria-label="Scrollable Redis Pub/Sub versus Kafka comparison" tabindex="0">
+          <table class="comparison">
+            <thead><tr><th scope="col">Dimension</th><th scope="col">Redis Pub/Sub · Ephemeral broker</th><th scope="col">Kafka · Distributed event streaming</th></tr></thead>
+            <tbody>
+              <tr><td>Core action</td><td><code>PUBLISH channel message</code>; broker pushes to active subscriptions</td><td>Producer appends a record to a topic partition; consumers fetch records</td></tr>
+              <tr><td>Storage and retention</td><td class="no">No retained Pub/Sub message history</td><td class="yes">Retained partitioned log, bounded by retention/compaction policy</td></tr>
+              <tr><td>Subscriber offline</td><td>Messages published while offline are lost to that subscriber</td><td>Can resume reading still-retained records using offsets</td></tr>
+              <tr><td>Progress and replay</td><td>No per-subscriber offset, acknowledgment, or replay</td><td>Per-partition offsets; rewind and replay retained records</td></tr>
+              <tr><td>Multiple consumers</td><td>All subscribed connections receive a matching publication</td><td>Each consumer group independently reads; a partition is assigned to one member within a group</td></tr>
+              <tr><td>Ordering scope</td><td>Messages sent on a given Redis subscriber connection follow the server's delivery order; no replayable log</td><td>Records are ordered <strong>within each partition</strong>, not necessarily across a topic</td></tr>
+              <tr><td>Delivery / failure model</td><td>At-most-once: no broker retry after missed delivery</td><td>Processing/retries depend on offset commits, acknowledgments, configuration, and application idempotency</td></tr>
+              <tr><td>Fit</td><td>WebSocket update notifications, cache invalidation hints, presence signals</td><td>Order-event pipelines, billing, analytics, audit feeds, independently replayable workflows</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <div class="notes-duo">
+        <article class="card notes-card" aria-labelledby="offline-heading">
+          <h3 id="offline-heading">Concrete test: what if the consumer disconnects?</h3>
+          <div class="scenario-row">
+            <div class="scenario-box redis"><h4>Redis Pub/Sub · Missed</h4><div class="stat">10:00 Subscriber offline<br>10:01 PUBLISH <b>M1</b><br>10:02 Subscriber reconnects<br>Result: <b>M1 is unavailable</b></div><p>Redis has no Pub/Sub history to fetch. The application needs a database or another recovery source.</p></div>
+            <div class="scenario-box kafka"><h4>Kafka · Catch up</h4><div class="stat">10:00 Consumer offline<br>10:01 Append <b>M1</b> (offset 42)<br>10:02 Consumer resumes<br>Result: <b>read offset 42</b></div><p>Assumes M1 is still retained and the consumer resumes from a position that includes it.</p></div>
+          </div>
+        </article>
+        <article class="card notes-card" aria-labelledby="decide-heading">
+          <h3 id="decide-heading">Which one for the chess/WebSocket example?</h3>
+          <div class="when-row"><span class="pill">Redis</span><div><strong>Use Redis Pub/Sub</strong> to notify gateways that a game move occurred, when the accepted move is already stored in a database. On reconnect, fetch missing moves by game sequence number.</div></div>
+          <div class="when-row"><span class="pill violet">Kafka</span><div><strong>Use Kafka</strong> when the same event must feed billing, analytics, fraud detection, or processors that need independent catch-up and replay.</div></div>
+          <div class="when-row"><span class="pill">Watch</span><div>One Kafka consumer group distributes topic partitions among group members. It <strong>does not broadcast every event to every WebSocket gateway</strong>. Design routing/fan-out explicitly.</div></div>
+        </article>
+      </div>
+
+      <details class="note-details">
+        <summary>Deeper notes: Kafka consumer groups vs Redis fan-out</summary>
+        <div class="detail-body">
+          <p><strong>Redis:</strong> Gateway A and Gateway B both subscribe to <code>game:500</code> → both receive each matching publication. Redis does not balance one message between these subscribers.</p>
+          <p><strong>Kafka, one group:</strong> Gateway A and Gateway B join group <code>ws-gateways</code>; if <code>game-events</code> has one partition, only one of those gateways owns and reads that partition at a time. That is useful for dividing processing work, but not enough when both gateways have users watching the game.</p>
+          <p><strong>Kafka, different groups:</strong> Independent services (e.g., <code>billing</code>, <code>analytics</code>) each read the retained log through separate consumer groups. Within a group, partitions divide work. Across groups, each group can see the same records.</p>
+        </div>
+      </details>
+      <details class="note-details">
+        <summary>Deeper notes: guarantees, alternatives, and how to decide</summary>
+        <div class="detail-body">
+          <p>Kafka is not automatically “exactly-once business processing.” Durability and processing semantics depend on producer acknowledgments, replication, transaction settings, consumer offset commits, and how the application handles duplicate side effects.</p>
+          <p><strong>Redis Streams</strong> is a third option: append entries with <code>XADD</code>; use <code>XREADGROUP</code> and <code>XACK</code> for consumer-group processing. It offers retention and pending-entry tracking, unlike Redis Pub/Sub.</p>
+          <p>Compare measured <strong>p99 end-to-end notification latency, messages/sec, bytes/sec × fan-out, consumer lag, retention period, recovery time, message-loss tolerance, and operations cost</strong>. Choose Redis Pub/Sub for disposable notifications; choose a retained event log when catch-up, replay, or independent processing is a requirement.</p>
+          <p><strong>Interview pitch:</strong> “I'd use a Pub/Sub broker for live fan-out because the database is the source of truth and reconnects can reconcile state. I'd use a distributed event streaming platform when consumers need durable event history, offsets, replay, and independent processing. The tradeoff is the complexity and cost of managing retained streams.”</p>
+        </div>
+      </details>
+      <div class="sources">Source of truth: <a href="https://redis.io/docs/latest/develop/pubsub/" target="_blank" rel="noopener noreferrer">Redis Pub/Sub semantics</a> · <a href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener noreferrer">Apache Kafka concepts</a> · <a href="https://redis.io/docs/latest/develop/data-types/streams/" target="_blank" rel="noopener noreferrer">Redis Streams</a>. Examples are explanatory; throughput and latency must be benchmarked for a deployment.</div>
+    </section>
+
+    <footer><span><strong>Key idea:</strong> Separate user-connection scale from backend event-distribution scale. Redis does not natively speak WebSocket.</span><span>Notes: <a href="#messaging-notes">Pub/Sub vs Kafka</a> · Further reading: <a href="https://redis.io/docs/latest/develop/pubsub/" target="_blank" rel="noopener noreferrer">Redis Pub/Sub</a> · <a href="https://redis.io/docs/latest/develop/reference/protocol-spec/" target="_blank" rel="noopener noreferrer">RESP protocol</a></span></footer>
+  </main>
+  <script>
+    (() => {
+      const steps = [
+        {title:'Start with the connections',detail:'Four browsers have WebSocket connections to two backend gateways. Both gateways subscribe to game:500, but each gateway knows only its own connected users.'},
+        {title:'1 · Gateway A publishes',detail:'User 101 makes a chess move. Gateway A validates and stores it, then executes PUBLISH game:500 with the move payload. Redis is not a WebSocket endpoint.'},
+        {title:'2 · Redis finds subscribers',detail:'Redis looks up game:500 in its subscription registry. It sends one notification over its Redis TCP connection to Gateway A and one to Gateway B.'},
+        {title:'3 · Gateways deliver locally',detail:'Gateway A forwards the move to Users 101 and 102. Gateway B forwards it to User 201. User 202 watches game:700 and does not receive this event.'},
+        {title:'4 · Two fan-out stages complete',detail:'One publication produced two Redis-to-gateway notifications and three gateway-to-browser sends. Redis maintained two backend subscriptions—not four browser connections.'}
+      ];
+      let step = 0;
+      const diagram = document.getElementById('architecture');
+      const title = document.getElementById('stepTitle');
+      const detail = document.getElementById('stepDetail');
+      const count = document.getElementById('stepCount');
+      const back = document.getElementById('backBtn');
+      const next = document.getElementById('nextBtn');
+      const dots = [...document.querySelectorAll('.step-dot')];
+      function render(){
+        diagram.dataset.step=String(step);
+        title.textContent=steps[step].title;
+        detail.textContent=steps[step].detail;
+        count.textContent=`STEP ${step} OF 4`;
+        dots.forEach((dot,i)=>dot.classList.toggle('done',i<=step));
+        back.disabled=step===0;
+        next.disabled=step===steps.length-1;
+        next.textContent=step===steps.length-1?'Completed ✓':'Next step →';
+      }
+      back.addEventListener('click',()=>{step=Math.max(0,step-1);render()});
+      next.addEventListener('click',()=>{step=Math.min(steps.length-1,step+1);render()});
+      document.getElementById('resetBtn').addEventListener('click',()=>{step=0;render()});
+      document.addEventListener('keydown',event=>{
+        if(event.altKey||event.ctrlKey||event.metaKey||['INPUT','TEXTAREA','SELECT','BUTTON'].includes(document.activeElement?.tagName)) return;
+        if(event.key==='ArrowRight'&&step<steps.length-1){step++;render()}
+        if(event.key==='ArrowLeft'&&step>0){step--;render()}
+      });
+      render();
+    })();
+  </script>
+</body>
+</html>
