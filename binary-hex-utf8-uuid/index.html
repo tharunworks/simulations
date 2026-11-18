@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Bits, Hex, UTF-8 & UUID — Mental Model</title>
+  <style>
+    :root { --ink:#15263b; --muted:#53667e; --line:#dce5ed; --blue:#2256b1; --blue-soft:#eff5ff; --green:#0f7564; --green-soft:#eaf8f4; --paper:#f5f7fb; --white:#fff; --amber:#a9680a; }
+    * { box-sizing:border-box; }
+    html {scroll-behavior:smooth;}
+    body {margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--paper); color:var(--ink); line-height:1.55;}
+    .shell {width:min(1060px, calc(100% - 32px)); margin:0 auto;}
+    header {padding:44px 0 30px; background:linear-gradient(130deg,#102748,#214e8b); color:white;}
+    header .eyebrow {margin:0 0 12px; text-transform:uppercase; letter-spacing:.13em; font-size:12px; color:#b8d3fa; font-weight:750;}
+    h1 {font-size:clamp(29px,5vw,46px); letter-spacing:-.045em; line-height:1.14; margin:0 0 12px;}
+    .lead {color:#e1ebfb; max-width:750px; font-size:16px; margin:0 0 22px;}
+    .mental {border:1px solid #6e9bd2; background:rgba(255,255,255,.08); border-radius:14px; padding:15px 18px; font-weight:600; max-width:820px;}
+    main {padding:28px 0 54px;}
+    h2 {font-size:22px; letter-spacing:-.025em; margin:0 0 14px;}
+    h3 {font-size:17px; margin:0 0 6px;}
+    p {margin:0 0 10px;}
+    section {margin:0 0 25px;}
+    .grid {display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px;}
+    .card, .panel {background:var(--white); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:0 2px 8px rgba(17,36,65,.025);}
+    .card .num {font-weight:800; color:var(--blue); font-size:24px; line-height:1.15; margin-bottom:7px;}
+    .card p {font-size:13px; color:var(--muted); margin:0;}
+    .card strong {display:block; margin-bottom:5px;}
+    .row {display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+    .small {color:var(--muted); font-size:13px;}
+    code, pre, .mono {font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+    code {background:#edf2f8; color:#193f7e; padding:2px 5px; border-radius:5px; overflow-wrap:anywhere;}
+    pre {background:#13243b; color:#eff7ff; border-radius:10px; padding:15px; margin:12px 0; font-size:13px; overflow:auto; line-height:1.75;}
+    .steps {display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:14px 0 4px;}
+    .chip {border:1px solid #b9cee9; background:var(--blue-soft); padding:9px 13px; border-radius:10px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:650;}
+    .arrow {color:var(--blue); font-size:20px; font-weight:800;}
+    table {border-collapse:collapse; width:100%; font-size:14px;}
+    th,td {padding:11px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top;}
+    th {background:#f0f5fa; color:#31465e; font-size:12px; text-transform:uppercase; letter-spacing:.045em;}
+    tr:last-child td {border-bottom:0;}
+    .table-wrap {overflow-x:auto; border:1px solid var(--line); border-radius:11px;}
+    .note {border-left:4px solid var(--green); padding:11px 13px; background:var(--green-soft); border-radius:0 9px 9px 0; font-size:14px;}
+    .formula {font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:700; color:#174c9d; font-size:15px;}
+    .controls {display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:12px;}
+    label {display:block; font-size:13px; font-weight:700; margin-bottom:6px;}
+    input,select,button {font:inherit;}
+    input,select {padding:11px 12px; border:1px solid #adbdcc; border-radius:9px; background:white; color:var(--ink); min-width:210px; max-width:100%;}
+    button {padding:11px 15px; border:0; border-radius:9px; background:#2256b1; color:white; font-weight:700; cursor:pointer;}
+    button:hover {background:#18458f;}
+    button:focus-visible,input:focus-visible,select:focus-visible {outline:3px solid #92b9ff; outline-offset:2px;}
+    .results {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;}
+    .result {background:#f2f6fb; border-radius:10px; padding:12px; min-width:0;}
+    .result span {font-size:11px; display:block; color:var(--muted); margin-bottom:5px;}
+    .result b {font-size:15px; display:block; overflow-wrap:anywhere; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+    .footer {padding:20px 0 35px; border-top:1px solid var(--line); font-size:12px; color:var(--muted);}
+    a {color:#2158ac; text-underline-offset:3px;}
+    .section-kicker {color:var(--green); text-transform:uppercase; letter-spacing:.1em; font-weight:800; font-size:11px; margin-bottom:5px;}
+    @media (max-width:800px) { .grid {grid-template-columns:repeat(2,1fr);} .row {grid-template-columns:1fr;} }
+    @media (max-width:540px) {header {padding:32px 0 26px;} .grid,.results {grid-template-columns:1fr;} .card {padding:15px;} .panel {padding:15px;} .steps {flex-direction:column; align-items:stretch;} .arrow {align-self:center; transform:rotate(90deg);} }
+    @media print {body {background:white;} header {background:white; color:var(--ink); padding-top:8px;} header .lead,header .eyebrow {color:var(--muted);} .mental {border-color:var(--line); background:#f0f5fa;} .panel,.card {box-shadow:none;} .interactive {display:none;} main {padding:15px 0;} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell">
+      <p style="margin:0 0 16px"><a href="../" style="color:#fff;text-decoration:underline;text-underline-offset:3px">← All simulations</a></p>
+      <p class="eyebrow">One-page study notes</p>
+      <h1>Binary · Hexadecimal · UTF-8 · UUID</h1>
+      <p class="lead">What is the value? How are we displaying it? How do we encode it into bytes? Keep those questions separate.</p>
+      <div class="mental">Mental model: <strong>Value / identity → representation → encoding → stored bytes</strong>. A human-readable label is not the same as the data it describes.</div>
+    </div>
+  </header>
+  <main class="shell">
+    <section aria-labelledby="concepts">
+      <h2 id="concepts">1. Four concepts</h2>
+      <div class="grid">
+        <article class="card"><div class="num">2</div><strong>Binary (base 2)</strong><p>Uses digits 0 and 1. One bit has 2 states; 8 bits form one byte.</p></article>
+        <article class="card"><div class="num">16</div><strong>Hexadecimal (base 16)</strong><p>Uses 0–9 and A–F. One hex digit corresponds to 4 binary bits.</p></article>
+        <article class="card"><div class="num">1–4</div><strong>UTF-8</strong><p>Encodes each Unicode code point into 1–4 bytes. ASCII characters use one byte each.</p></article>
+        <article class="card"><div class="num">128</div><strong>UUID</strong><p>A 128-bit identifier. Its standard text form is 32 hex digits plus 4 hyphens.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="hex-why">
+      <div class="panel">
+        <p class="section-kicker">Derive the rule</p>
+        <h2 id="hex-why">2. Why 4 bits = 1 hexadecimal digit</h2>
+        <p>Each bit has 2 choices. Four bits have <span class="formula">2 × 2 × 2 × 2 = 16</span> combinations. Hexadecimal has exactly 16 digits (<code>0–9, A–F</code>), so every 4-bit pattern maps to one hex digit.</p>
+        <div class="steps" aria-label="Example binary to hex conversion"><span class="chip">101011₂</span><span class="arrow">→</span><span class="chip">0010 1011</span><span class="arrow">→</span><span class="chip">2B₁₆</span></div>
+        <p class="small">Group from the right and pad with leading zeroes. 0010 = 2; 1011 = decimal 11 = B. Check: 2 × 16 + 11 = 43.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="interpret">
+      <h2 id="interpret">3. Same characters, different byte sequences</h2>
+      <div class="row">
+        <article class="panel">
+          <p class="section-kicker">Decode hexadecimal text</p>
+          <h3><code>"4142"</code> → <code>41 42</code></h3>
+          <p>Read every pair of hex digits as a byte value. <strong>2 bytes</strong> are produced.</p>
+          <pre>"4142" (hex text)
+  41    42    ← two bytes
+  ↓     ↓
+  A     B     ← if decoded as UTF-8</pre>
+          <p class="small">Operation: <code>HexFormat.of().parseHex("4142")</code></p>
+        </article>
+        <article class="panel">
+          <p class="section-kicker">Encode text as UTF-8</p>
+          <h3><code>"4142"</code> → <code>34 31 34 32</code></h3>
+          <p>Encode each character <code>'4'</code>, <code>'1'</code>, <code>'4'</code>, <code>'2'</code>. <strong>4 bytes</strong> are produced.</p>
+          <pre>"4142" (four characters)
+  '4'  '1'  '4'  '2'
+   ↓    ↓    ↓    ↓
+  34   31   34   32  ← hex byte values</pre>
+          <p class="small">Operation: <code>"4142".getBytes(StandardCharsets.UTF_8)</code></p>
+        </article>
+      </div>
+      <div class="note" style="margin-top:12px"><strong>Remember:</strong> <code>0xFF</code> is one byte containing decimal 255. The UTF-8 string <code>"FF"</code> uses two bytes: <code>0x46 0x46</code>. Hex decoding and UTF-8 encoding perform different jobs.</div>
+    </section>
+
+    <section aria-labelledby="uuid">
+      <div class="panel">
+        <p class="section-kicker">Storage vs presentation</p>
+        <h2 id="uuid">4. Why a UUID can be 16, 32, or 36 bytes</h2>
+        <p class="mono" style="overflow-wrap:anywhere">550e8400-e29b-41d4-a716-446655440000</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Representation</th><th>Calculation</th><th>Size</th></tr></thead>
+            <tbody>
+              <tr><td>UUID bits stored directly</td><td>128 bits ÷ 8</td><td><strong>16 bytes</strong></td></tr>
+              <tr><td>32 hex digits stored as UTF-8 text</td><td>32 ASCII characters × 1</td><td><strong>32 bytes</strong></td></tr>
+              <tr><td>Canonical text with four hyphens stored as UTF-8</td><td>36 ASCII characters × 1</td><td><strong>36 bytes</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small" style="margin-top:11px">These are payload sizes, excluding database row metadata and programming-language object overhead. A UUID is an <strong>identifier</strong>, not inherently a string or a quantity, although its 128 bits can be interpreted numerically.</p>
+      </div>
+    </section>
+
+    <section class="interactive" aria-labelledby="converter">
+      <div class="panel">
+        <p class="section-kicker">Try it yourself</p>
+        <h2 id="converter">5. Mini converter</h2>
+        <p class="small">Enter nonnegative decimal integer (up to 30 digits). See the same numeric value represented in binary and hexadecimal.</p>
+        <div class="controls">
+          <div><label for="decimal">Decimal value</label><input id="decimal" type="text" inputmode="numeric" value="43" autocomplete="off" spellcheck="false"></div>
+          <button id="convert" type="button">Convert</button>
+        </div>
+        <div class="results" aria-live="polite">
+          <div class="result"><span>Decimal</span><b id="decOut">43</b></div>
+          <div class="result"><span>Binary (base 2)</span><b id="binOut">101011</b></div>
+          <div class="result"><span>Hexadecimal (base 16)</span><b id="hexOut">2B</b></div>
+        </div>
+        <p id="error" role="alert" class="small" style="color:#a13026;margin-top:8px;min-height:1em"></p>
+      </div>
+    </section>
+
+    <section aria-labelledby="interview">
+      <div class="panel">
+        <h2 id="interview">6. Interview takeaway</h2>
+        <p><strong>What:</strong> A UUID identifies an entity using 128 bits. <strong>Why:</strong> Binary storage and textual formatting serve different purposes. <strong>How:</strong> Store 16 bytes directly, or display 32 hexadecimal digits (usually with hyphens); UTF-8 encodes those displayed characters into 32 or 36 bytes. <strong>Trade-off:</strong> Binary uses less storage; text is easier to inspect and exchange in text-based formats.</p>
+        <p class="small"><strong>Further reading:</strong> <a href="https://www.rfc-editor.org/rfc/rfc3629" target="_blank" rel="noopener noreferrer">RFC 3629 (UTF-8)</a> · <a href="https://www.rfc-editor.org/rfc/rfc9562" target="_blank" rel="noopener noreferrer">RFC 9562 (UUID)</a> · <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/HexFormat.html" target="_blank" rel="noopener noreferrer">Java HexFormat</a> · <a href="https://www.postgresql.org/docs/current/datatype-uuid.html" target="_blank" rel="noopener noreferrer">PostgreSQL UUID</a>.</p>
+      </div>
+    </section>
+  </main>
+  <footer class="shell footer">Study reference · Binary, hexadecimal, UTF-8, and UUID · Confidence: 99% (standard encodings and payload sizes)</footer>
+  <script>
+    (() => {
+      const input = document.getElementById('decimal');
+      const output = [document.getElementById('decOut'),document.getElementById('binOut'),document.getElementById('hexOut')];
+      const error = document.getElementById('error');
+      function convert() {
+        const value = input.value.trim();
+        if (!/^\d{1,30}$/.test(value)) {
+          error.textContent = 'Enter a nonnegative whole number containing 1 to 30 decimal digits.';
+          output.forEach(node => node.textContent = '—');
+          return;
+        }
+        const n = BigInt(value);
+        error.textContent = '';
+        output[0].textContent = n.toString(10);
+        output[1].textContent = n.toString(2);
+        output[2].textContent = n.toString(16).toUpperCase();
+      }
+      document.getElementById('convert').addEventListener('click', convert);
+      input.addEventListener('input', convert);
+      convert();
+    })();
+  </script>
+</body>
+</html>
