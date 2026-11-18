@@ -17,12 +17,15 @@ A collection of simulations for learning software engineering and distributed sy
 
 | Redis Pub/Sub + WebSockets: Architecture Explained | Connection multiplexing, hierarchical fan-out, Pub/Sub patterns, Kafka vs Redis delivery/retention | [Open](https://tharunworks.github.io/simulations/redis-pubsub-websockets/) |
 
+| Load Balancers: Architecture & L4 NAT | L4 NAT, DSR, full proxy, L7 reverse proxy, flow tables, backend discovery, scaling | [Open](https://tharunworks.github.io/simulations/load-balancers/) |
+
 ## Chess CAP note
 
 A player using two devices can submit competing moves. For example, Alice's laptop submits `e2e4` to Server A while her phone submits `d2d4` to Server B. During a network partition, independently writable servers can each believe it is White's turn and acknowledge conflicting moves. The simulation demonstrates this issue, a single-authoritative-writer design, stale asynchronous PostgreSQL reads, and unsafe failover.
 
 ## Structure
 
+- `load-balancers/index.html`: L4/L7 load balancer diagrams and L4 NAT notes.
 - `redis-pubsub-websockets/index.html`: Redis Pub/Sub, WebSocket fan-out, and Kafka comparison explainer.
 - `chat-delivery-scaling/index.html`: interactive chat/WebSocket architecture and scaling simulator.
 
