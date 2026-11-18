@@ -8,6 +8,7 @@ A collection of simulations for learning software engineering and distributed sy
 
 | Simulation | Topics | Launch |
 | --- | --- | --- |
+| Binary, Hexadecimal, UTF-8 & UUID | Bits and bytes, radix conversion, UTF-8 encoding, UUID storage, interactive decimal converter | [Open](https://tharunworks.github.io/simulations/binary-hex-utf8-uuid/) |
 | S3 Multipart Upload | Part sizes, checksum modes, signatures, and failure scenarios | [Open](https://tharunworks.github.io/simulations/s3-multipart-upload/) |
 
 | Manifest Quest | HLS manifests, bitrate selection, buffering, CDN cache hits and S3 request flow | [Open](https://tharunworks.github.io/simulations/manifest-quest/) |
@@ -32,6 +33,7 @@ A player using two devices can submit competing moves. For example, Alice's lapt
 
 - `chess-cap/index.html`: stepwise chess CAP simulation and learning notes.
 - `manifest-quest/index.html`: streaming and manifest simulation.
+- `binary-hex-utf8-uuid/index.html`: first-principles study notes and number converter.
 - `index.html`: collection homepage.
 - `s3-multipart-upload/index.html`: S3 multipart upload simulation.
 
