@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Load balancer architecture comparison and L4 NAT notes: traffic paths, connection state, backend discovery, and capacity planning.">
+  <title>Load Balancers — Architecture &amp; L4 NAT Notes</title>
+  <style>
+    :root { --ink:#172334; --muted:#546579; --line:#dae3ea; --surface:#ffffff; --soft:#f4f7fa; --teal:#0c8f7b; --blue:#2567c3; --navy:#10243e; --chip:#eaf4f2; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:#edf2f6; color:var(--ink); font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; line-height:1.48; }
+    .page { width:min(1280px,calc(100% - 36px)); margin:28px auto 48px; background:var(--surface); border:1px solid #dce4eb; border-radius:16px; box-shadow:0 9px 32px rgba(25,46,69,.07); overflow:hidden; }
+    header { padding:32px 40px 25px; color:white; background:linear-gradient(105deg,#10243e,#173d5d); }
+    .eyebrow { font-size:11px; letter-spacing:.16em; font-weight:750; text-transform:uppercase; color:#a9d0e0; margin-bottom:10px; }
+    h1 { font-size:clamp(26px,3vw,35px); font-weight:760; line-height:1.15; margin:0 0 11px; letter-spacing:-.035em; }
+    .subtitle { margin:0; max-width:850px; color:#d5e4f0; font-size:14px; }
+    .tagrow { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+    .tag { background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.17); border-radius:100px; padding:5px 11px; color:#edf9ff; font-size:11px; }
+    main { padding:27px 40px 38px; }
+    h2 { font-size:19px; letter-spacing:-.016em; margin:0 0 9px; }
+    .section { margin-top:28px; }
+    .section:first-child { margin-top:0; }
+    .lead { margin:0 0 14px; color:var(--muted); font-size:13px; }
+    .table-scroll { overflow-x:auto; border:1px solid var(--line); border-radius:11px; }
+    table { border-collapse:collapse; width:100%; }
+    .comparison { min-width:1030px; table-layout:fixed; }
+    .comparison col:nth-child(1) { width:142px; }
+    .comparison col:nth-child(2) { width:380px; }
+    .comparison col:nth-child(3) { width:240px; }
+    .comparison col:nth-child(4) { width:260px; }
+    th { background:#eef3f7; color:#3c4d60; text-align:left; text-transform:uppercase; letter-spacing:.065em; font-size:10px; font-weight:800; padding:13px 15px; border-bottom:1px solid var(--line); }
+    td { font-size:12.5px; padding:14px 15px; border-bottom:1px solid var(--line); vertical-align:top; }
+    tr:last-child td { border-bottom:0; }
+    tbody tr:nth-child(even) { background:#fbfcfd; }
+    .type { font-size:14px; font-weight:780; color:#10243e; line-height:1.25; }
+    .type-note { color:var(--muted); font-size:11px; margin-top:5px; }
+    .diagram { width:100%; max-width:360px; height:auto; display:block; }
+    .legend { font-size:10px; color:var(--muted); margin:4px 0 0; }
+    .legend .request { color:var(--teal); font-weight:750; }
+    .legend .response { color:var(--blue); font-weight:750; }
+    p { margin:0 0 8px; }
+    td p:last-child { margin-bottom:0; }
+    strong { font-weight:750; }
+    code { font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:.92em; background:#f0f4f7; padding:1px 4px; border-radius:3px; }
+    .small { color:var(--muted); font-size:11px; }
+    .detail { width:100%; min-width:740px; }
+    .detail th:nth-child(1) { width:190px; }
+    .detail th:nth-child(2) { width:255px; }
+    .detail td { padding:12px 15px; }
+    .two-col { display:grid; grid-template-columns:1.06fr .94fr; gap:18px; margin-top:15px; }
+    .panel { border:1px solid var(--line); border-radius:11px; padding:17px 19px; background:#fff; }
+    .panel h3 { margin:0 0 11px; font-size:14px; letter-spacing:-.01em; }
+    .flow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:11px 0 8px; }
+    .flow-chip { border-radius:7px; border:1px solid #c8d8e6; background:#f5f9fb; padding:8px 11px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .flow-arrow { font-size:19px; color:var(--teal); }
+    .footnote { margin:9px 0 0; color:var(--muted); font-size:11px; }
+    ul { padding-left:17px; margin:9px 0 0; }
+    li { margin:5px 0; }
+    pre { border-radius:9px; padding:13px 15px; background:#13253b; color:#e8f3ff; overflow-x:auto; font-size:11.5px; line-height:1.65; margin:10px 0; }
+    pre code { color:inherit; font-size:inherit; background:transparent; padding:0; }
+    .label { color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:10px; font-weight:800; margin-bottom:5px; }
+    .kicker { display:inline-block; background:var(--chip); color:#087664; border:1px solid #cae7e1; padding:3px 8px; border-radius:5px; font-size:11px; font-weight:800; margin-bottom:6px; }
+    .summarybar { border-left:4px solid var(--teal); padding:12px 17px; background:#f0f8f6; border-radius:0 9px 9px 0; font-size:13px; margin-top:24px; }
+    footer { padding:0 40px 29px; font-size:11px; color:var(--muted); }
+    a { color:#0c5eaa; text-underline-offset:2px; }
+    @media (max-width:800px) { header { padding:25px 22px; } main { padding:22px; } footer { padding:0 22px 24px; } .two-col { grid-template-columns:1fr; } .page { width:calc(100% - 16px); margin:8px auto 20px; border-radius:10px; } }
+    @media print { @page { size:A4 landscape; margin:12mm; } body { background:white; print-color-adjust:exact; -webkit-print-color-adjust:exact; } .page { margin:0; border:0; border-radius:0; box-shadow:none; width:100%; } header { padding:20px 25px; } main { padding:18px 25px; } .comparison { min-width:0; } .comparison col:nth-child(1) { width:13%; } .comparison col:nth-child(2) { width:37%; } .comparison col:nth-child(3) { width:23%; } .comparison col:nth-child(4) { width:27%; } td { padding:10px 9px; font-size:10px; } th { padding:10px 9px; } .diagram { max-width:310px; } .section { break-inside:avoid; } .table-scroll { overflow:visible; } .two-col { break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">Distributed Systems / Networking</div>
+    <h1>Load Balancers: Architecture &amp; L4 NAT</h1>
+    <p class="subtitle">Comparison of traffic paths and TCP termination, followed by notes on NAT connection mappings, backend discovery, and capacity planning.</p>
+    <div class="tagrow"><span class="tag">L4 NAT</span><span class="tag">L4 DSR</span><span class="tag">L4 Full Proxy</span><span class="tag">L7 Reverse Proxy</span></div>
+    <a href="../" style="display:inline-block;margin-top:14px;color:#d6f1ff;text-decoration:underline">← All simulations</a>
+  </header>
+  <main>
+    <section class="section" aria-labelledby="comparison-heading">
+      <h2 id="comparison-heading">1. Architecture comparison</h2>
+      <p class="lead">Green = client-to-server direction; blue = server-to-client direction. Diagrams are logical packet/connection paths, not physical cabling.</p>
+      <div class="table-scroll">
+        <table class="comparison">
+          <colgroup><col><col><col><col></colgroup>
+          <thead><tr><th scope="col">Type</th><th scope="col">Diagram</th><th scope="col">TCP &amp; packet behavior</th><th scope="col">State &amp; tradeoffs</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="type">L4 NAT</div><div class="type-note">Network address translation</div></td>
+              <td>
+                <svg class="diagram" viewBox="0 0 350 133" role="img" aria-label="L4 NAT: request flows client to LB to server, and response flows server to LB to client; one end-to-end TCP connection">
+                  <defs><marker id="nat-req" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#0c8f7b"/></marker><marker id="nat-res" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#2567c3"/></marker></defs>
+                  <g fill="#f0f4f8" stroke="#a7b7c7"><rect x="6" y="42" width="76" height="44" rx="7"/><rect x="136" y="42" width="78" height="44" rx="7"/><rect x="269" y="42" width="75" height="44" rx="7"/></g>
+                  <g font-family="Arial,sans-serif" font-size="12" fill="#172334" text-anchor="middle" font-weight="600"><text x="44" y="68">Client</text><text x="175" y="68">NAT LB</text><text x="306" y="68">Server</text></g>
+                  <g fill="none" stroke="#0c8f7b" stroke-width="2.4" marker-end="url(#nat-req)"><path d="M44 40V17H175V40"/><path d="M175 40V17H306V40"/></g>
+                  <g fill="none" stroke="#2567c3" stroke-width="2.4" marker-end="url(#nat-res)"><path d="M306 88V110H175V88"/><path d="M175 88V110H44V88"/></g>
+                  <text x="110" y="11" fill="#0c8f7b" text-anchor="middle" font-size="10" font-family="Arial">request</text><text x="241" y="11" fill="#0c8f7b" text-anchor="middle" font-size="10" font-family="Arial">DNAT</text>
+                  <text x="110" y="124" fill="#2567c3" text-anchor="middle" font-size="10" font-family="Arial">response</text><text x="241" y="124" fill="#2567c3" text-anchor="middle" font-size="10" font-family="Arial">reverse NAT</text>
+                </svg>
+                <p class="legend"><span class="request">Request through LB</span> · <span class="response">Response through LB</span></p>
+              </td>
+              <td><p><strong>1 end-to-end TCP connection.</strong> Backend completes the TCP handshake with the client.</p><p>LB rewrites destination IP/port on requests and reverses the translation on responses.</p></td>
+              <td><p>Keeps flow/NAT mappings and a local backend table.</p><p>LB processes both directions: bandwidth, PPS, and concurrent flow capacity matter.</p></td>
+            </tr>
+            <tr>
+              <td><div class="type">L4 DSR</div><div class="type-note">Direct Server Return</div></td>
+              <td>
+                <svg class="diagram" viewBox="0 0 350 133" role="img" aria-label="L4 DSR: request goes through load balancer to server, response returns directly from server to client bypassing load balancer">
+                  <defs><marker id="dsr-req" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#0c8f7b"/></marker><marker id="dsr-res" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#2567c3"/></marker></defs>
+                  <g fill="#f0f4f8" stroke="#a7b7c7"><rect x="6" y="42" width="76" height="44" rx="7"/><rect x="136" y="42" width="78" height="44" rx="7"/><rect x="269" y="42" width="75" height="44" rx="7"/></g>
+                  <g font-family="Arial,sans-serif" font-size="12" fill="#172334" text-anchor="middle" font-weight="600"><text x="44" y="68">Client</text><text x="175" y="68">DSR LB</text><text x="306" y="68">Server</text></g>
+                  <g fill="none" stroke="#0c8f7b" stroke-width="2.4" marker-end="url(#dsr-req)"><path d="M44 40V17H175V40"/><path d="M175 40V17H306V40"/></g>
+                  <path d="M306 88V111H44V88" fill="none" stroke="#2567c3" stroke-width="2.4" marker-end="url(#dsr-res)"/>
+                  <text x="175" y="11" fill="#0c8f7b" text-anchor="middle" font-size="10" font-family="Arial">request via LB</text><text x="175" y="127" fill="#2567c3" text-anchor="middle" font-size="10" font-family="Arial">direct response — LB bypassed</text>
+                </svg>
+                <p class="legend"><span class="request">Request through LB</span> · <span class="response">Direct return</span></p>
+              </td>
+              <td><p><strong>1 end-to-end TCP connection.</strong> LB forwards inbound packets, often by changing the Ethernet destination MAC.</p><p>Server accepts traffic for the VIP and sends responses directly.</p></td>
+              <td><p>LB can maintain per-flow backend affinity.</p><p>Less return-path bandwidth at LB; requires VIP and routing/ARP configuration on backends.</p></td>
+            </tr>
+            <tr>
+              <td><div class="type">L4 Full Proxy</div><div class="type-note">TCP-level proxy</div></td>
+              <td>
+                <svg class="diagram" viewBox="0 0 350 133" role="img" aria-label="L4 full proxy: independent bidirectional TCP connection from client to LB and from LB to server">
+                  <defs><marker id="l4p-green" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#0c8f7b"/></marker><marker id="l4p-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#2567c3"/></marker></defs>
+                  <g fill="#f0f4f8" stroke="#a7b7c7"><rect x="6" y="42" width="76" height="44" rx="7"/><rect x="136" y="42" width="78" height="44" rx="7"/><rect x="269" y="42" width="75" height="44" rx="7"/></g>
+                  <g font-family="Arial,sans-serif" font-size="12" fill="#172334" text-anchor="middle" font-weight="600"><text x="44" y="68">Client</text><text x="175" y="68">L4 Proxy</text><text x="306" y="68">Server</text></g>
+                  <g fill="none" stroke-width="2.3" marker-end="url(#l4p-green)" stroke="#0c8f7b"><path d="M84 54H134"/><path d="M216 54H267"/></g>
+                  <g fill="none" stroke-width="2.3" marker-end="url(#l4p-blue)" stroke="#2567c3"><path d="M266 76H216"/><path d="M134 76H84"/></g>
+                  <text x="109" y="35" fill="#172334" text-anchor="middle" font-size="11" font-family="Arial">TCP #1</text><text x="241" y="35" fill="#172334" text-anchor="middle" font-size="11" font-family="Arial">TCP #2</text>
+                  <text x="175" y="113" fill="#546579" text-anchor="middle" font-size="11" font-family="Arial">LB terminates both TCP connections</text>
+                </svg>
+                <p class="legend"><span class="request">Forward payload bytes</span> · <span class="response">Return payload bytes</span></p>
+              </td>
+              <td><p><strong>2 independent TCP connections</strong>: client↔LB and LB↔server.</p><p>Proxy terminates TCP but need not parse HTTP. Example: HAProxy <code>mode tcp</code>.</p></td>
+              <td><p>Maintains TCP socket and buffering state on both sides.</p><p>Allows transport-level control, with added memory and processing overhead.</p></td>
+            </tr>
+            <tr>
+              <td><div class="type">L7 Proxy</div><div class="type-note">HTTP reverse proxy</div></td>
+              <td>
+                <svg class="diagram" viewBox="0 0 350 133" role="img" aria-label="L7 proxy: client has one transport connection to proxy and proxy has a separate backend connection; proxy inspects HTTP requests">
+                  <defs><marker id="l7-green" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#0c8f7b"/></marker><marker id="l7-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6Z" fill="#2567c3"/></marker></defs>
+                  <g fill="#f0f4f8" stroke="#a7b7c7"><rect x="6" y="42" width="76" height="44" rx="7"/><rect x="136" y="42" width="78" height="44" rx="7"/><rect x="269" y="42" width="75" height="44" rx="7"/></g>
+                  <g font-family="Arial,sans-serif" font-size="12" fill="#172334" text-anchor="middle" font-weight="600"><text x="44" y="68">Client</text><text x="175" y="68">L7 Proxy</text><text x="306" y="68">Server</text></g>
+                  <g fill="none" stroke-width="2.3" marker-end="url(#l7-green)" stroke="#0c8f7b"><path d="M84 54H134"/><path d="M216 54H267"/></g>
+                  <g fill="none" stroke-width="2.3" marker-end="url(#l7-blue)" stroke="#2567c3"><path d="M266 76H216"/><path d="M134 76H84"/></g>
+                  <text x="109" y="35" fill="#172334" text-anchor="middle" font-size="11" font-family="Arial">TCP #1</text><text x="241" y="35" fill="#172334" text-anchor="middle" font-size="11" font-family="Arial">TCP #2*</text>
+                  <rect x="124" y="99" width="102" height="23" rx="5" fill="#eaf4f2" stroke="#8fcec3"/>
+                  <text x="175" y="114" fill="#087664" text-anchor="middle" font-size="11" font-family="Arial" font-weight="600">HTTP routing</text>
+                </svg>
+                <p class="legend">*Backend TCP connections may be pooled, reused, or multiplexed.</p>
+              </td>
+              <td><p><strong>Separate client- and server-side connections</strong> in a typical HTTP/TCP deployment.</p><p>Can route by path, host, header, or cookie. Examples: NGINX and HAProxy <code>mode http</code>.</p></td>
+              <td><p>Maintains transport state and request-level processing.</p><p>Enables HTTP routing and pooling; consumes CPU/memory for protocol processing.</p></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote">Note: “one TCP connection” refers to a TCP client/server connection through a forwarding LB, not a direct physical link. HTTP/3 uses QUIC/UDP, so TCP counts do not apply to that mode.</p>
+    </section>
+
+    <section class="section" aria-labelledby="nat-heading">
+      <h2 id="nat-heading">2. Inside an L4 NAT load balancer</h2>
+      <p class="lead">It acts like a NAT router with backend-selection logic. Backend membership and per-flow NAT state serve different purposes.</p>
+      <div class="table-scroll">
+        <table class="detail">
+          <thead><tr><th scope="col">Component</th><th scope="col">Purpose</th><th scope="col">Implementation / updates</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Backend registry</strong></td><td>Lists eligible backends, such as <code>10.0.0.11:8080</code> and <code>10.0.0.12:8080</code>.</td><td>Static configuration, Keepalived health checks, Consul/etcd, or Kubernetes EndpointSlices. Local snapshot in the LB.</td></tr>
+            <tr><td><strong>Connection (flow) table</strong></td><td>Maps each client flow to a chosen backend and its NAT translation.</td><td>Usually memory-resident, with hash-based lookup. Entries are created for flows and expire on timeout/closure.</td></tr>
+            <tr><td><strong>5-tuple flow identity</strong></td><td><code>(source IP, source port, destination IP, destination port, protocol)</code>.</td><td>Used to identify flow direction and find the corresponding mapping.</td></tr>
+            <tr><td><strong>NAT packet path</strong></td><td>DNAT on requests; reverse translation on responses.</td><td>LB must receive both directions and preserve connection-to-backend affinity.</td></tr>
+            <tr><td><strong>Control plane vs data plane</strong></td><td>Control plane updates eligible backend membership; data plane forwards packets.</td><td>Service discovery is <strong>not</strong> queried on every packet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <h3>Backend discovery pipeline</h3>
+          <div class="flow" aria-label="Registry to controller to local LB table">
+            <span class="flow-chip">Consul / etcd / Config</span><span class="flow-arrow">→</span><span class="flow-chip">LB Controller</span><span class="flow-arrow">→</span><span class="flow-chip">IPVS Backend Table</span>
+          </div>
+          <p class="small">No PostgreSQL is required. A separate service registry becomes useful when backend instances join and leave dynamically.</p>
+        </div>
+        <div class="panel">
+          <h3>Flow mapping example</h3>
+          <div class="label">Client request to LB VIP</div>
+          <pre><code>192.0.2.10:50000 → 203.0.113.10:443
+                 DNAT ↓
+192.0.2.10:50000 → 10.0.0.11:8080</code></pre>
+          <p class="small">The server replies through the LB; reverse NAT makes the reply appear to originate from the VIP.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="scale-heading">
+      <h2 id="scale-heading">3. Resource use &amp; scaling</h2>
+      <div class="table-scroll">
+        <table class="detail">
+          <thead><tr><th scope="col">Metric / concern</th><th scope="col">What drives it</th><th scope="col">Scaling implication</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Memory</strong></td><td>Concurrent flow/NAT entries</td><td>Measure active flow count and table utilization.</td></tr>
+            <tr><td><strong>CPU / PPS</strong></td><td>Packet lookups, routing, NAT, checksums</td><td>Measure packets per second and packet drops.</td></tr>
+            <tr><td><strong>Bandwidth</strong></td><td>Request <em>and</em> response bytes (NAT)</td><td>Watch bidirectional throughput and NIC limits.</td></tr>
+            <tr><td><strong>CPS</strong></td><td>New flow creation rate</td><td>Measure new connections per second.</td></tr>
+            <tr><td><strong>Horizontal scaling</strong></td><td>Each LB has local flow mappings</td><td>Maintain flow affinity and return-path symmetry; failover may require state synchronization.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footnote">Example memory estimate: at an assumed 512 bytes of state/overhead per flow, 1 million concurrent flows would use about 512 MB. This is an illustration, not an IPVS benchmark.</p>
+    </section>
+
+
+    <div class="summarybar"><strong>Takeaway:</strong> L4 NAT = packet forwarding + NAT + backend selection + flow tracking. L4 DSR bypasses the LB on replies. L4 full proxies terminate TCP; L7 proxies additionally understand application protocols such as HTTP.</div>
+  </main>
+  <footer>
+    Further reference: <a href="https://www.linuxvirtualserver.org/" target="_blank" rel="noopener">Linux Virtual Server (IPVS)</a> · <a href="https://keepalived.org/" target="_blank" rel="noopener">Keepalived</a> · <a href="https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/" target="_blank" rel="noopener">Kubernetes EndpointSlices</a><br>
+    Confidence: 99% in the architectural distinctions.
+  </footer>
+</div>
+</body>
+</html>
