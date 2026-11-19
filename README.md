@@ -8,6 +8,7 @@ A collection of simulations for learning software engineering and distributed sy
 
 | Simulation | Topics | Launch |
 | --- | --- | --- |
+| Cassandra Fieldnotes | Cassandra and distributed systems; externally hosted simulation | [Open](https://cassandra-fieldnotes-ring-e8f15.fondsmile19.chatgpt.site/) |
 | Binary, Hexadecimal, UTF-8 & UUID | Bits and bytes, radix conversion, UTF-8 encoding, UUID storage, interactive decimal converter | [Open](https://tharunworks.github.io/simulations/binary-hex-utf8-uuid/) |
 | S3 Multipart Upload | Part sizes, checksum modes, signatures, and failure scenarios | [Open](https://tharunworks.github.io/simulations/s3-multipart-upload/) |
 
